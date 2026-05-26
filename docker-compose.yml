@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: banking-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: banking
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d banking"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  spring-boot-service:
+    build: ./spring-boot-service
+    container_name: core-banking
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_URL=${DB_URL}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+    networks:
+      - banking-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gin-service:
+    build: ./gin-service
+    container_name: transfer-processor
+    ports:
+      - "8081:8081"
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSLMODE=${DB_SSLMODE}
+      - SPRING_BOOT_URL=${SPRING_BOOT_URL}
+    networks:
+      - banking-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      spring-boot-service:
+        condition: service_started
+    restart: unless-stopped
+
+  fastapi-service:
+    build: ./fastapi-service
+    container_name: fraud-analytics
+    ports:
+      - "8082:8082"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SPRING_BOOT_URL=${SPRING_BOOT_URL}
+    networks:
+      - banking-net
+    restart: unless-stopped
+
+  streamlit-service:
+    build: ./streamlit-service
+    container_name: banking-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      - SPRING_BOOT_URL=${SPRING_BOOT_URL}
+      - GIN_URL=${GIN_URL}
+      - FASTAPI_URL=${FASTAPI_URL}
+    networks:
+      - banking-net
+    depends_on:
+      spring-boot-service:
+        condition: service_started
+      gin-service:
+        condition: service_started
+      fastapi-service:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+
+networks:
+  banking-net:
+    driver: bridge
