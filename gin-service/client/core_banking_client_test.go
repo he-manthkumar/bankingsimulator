@@ -180,3 +180,30 @@ func Test_GetTransaction_shouldReturnErrorWhenServerReturnsInvalidJSON(t *testin
 	assert.Error(t, err)
 	assert.Nil(t, result)
 }
+
+func Test_SettleTransfer_shouldReturnErrorWhenServerIsUnreachable(t *testing.T) {
+	// Point to a server that is already closed — triggers the network error branch
+	server := newTestServer(t, http.StatusOK, nil)
+	server.Close() // close immediately so the URL is valid but unreachable
+
+	result, err := newTestClient(server).SettleTransfer(
+		"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+		"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+		100.00, "NEFT", "1234",
+	)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "core banking service unavailable")
+	assert.Nil(t, result)
+}
+
+func Test_GetTransaction_shouldReturnErrorWhenServerIsUnreachable(t *testing.T) {
+	server := newTestServer(t, http.StatusOK, nil)
+	server.Close()
+
+	result, err := newTestClient(server).GetTransaction("cccccccc-cccc-cccc-cccc-cccccccccccc")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "core banking service unavailable")
+	assert.Nil(t, result)
+}

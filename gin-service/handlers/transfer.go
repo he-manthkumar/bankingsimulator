@@ -9,10 +9,17 @@ import (
 	"banking/gin-service/client"
 	"banking/gin-service/db"
 	"banking/gin-service/models"
+	temporalsetup "banking/gin-service/temporal"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	temporalclient "go.temporal.io/sdk/client"
 )
+
+// TemporalClient is set by main.go after connecting to the Temporal server.
+// If nil (e.g. during unit tests or local dev without Temporal), the handler
+// falls back to the goroutine-based simulateSettlement.
+var TemporalClient temporalclient.Client
 
 type TransferRequest struct {
 	FromAccount  string  `json:"from_account" binding:"required"`
@@ -79,7 +86,24 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 			"transfer": transfer,
 		})
 	} else {
-		go simulateSettlement(transfer, bankingClient, req.Tpin)
+		// NEFT / RTGS — use Temporal for durable, crash-safe settlement
+		if TemporalClient != nil {
+			temporalsetup.StartSettlementWorkflow(
+				TemporalClient,
+				transfer.ID.String(),
+				transfer.FromAccount.String(),
+				transfer.ToAccount.String(),
+				transfer.Amount,
+				transfer.TransferMode,
+				req.Tpin,
+			)
+		} else {
+			// Fallback: goroutine-based settlement (used in tests and local dev
+			// when Temporal server is not running)
+			log.Printf("Warning: Temporal not connected — using goroutine fallback for %s transfer %s",
+				req.TransferMode, transfer.ID)
+			go simulateSettlement(transfer, bankingClient, req.Tpin)
+		}
 		c.JSON(http.StatusAccepted, gin.H{
 			"message":  fmt.Sprintf("%s transfer initiated", req.TransferMode),
 			"transfer": transfer,
@@ -126,6 +150,8 @@ func getInitialStatus(mode string) string {
 	}
 }
 
+// simulateSettlement is the goroutine-based fallback used when Temporal is unavailable.
+// Kept for backward compatibility with tests and local dev without a Temporal server.
 func simulateSettlement(transfer models.Transfer, bankingClient client.BankingClient, tpin string) {
 	switch transfer.TransferMode {
 	case "NEFT":
