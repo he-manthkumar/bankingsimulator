@@ -1,0 +1,751 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>client: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">banking/gin-service/client/core_banking_client.go (94.1%)</option>
+				
+				<option value="file1">banking/gin-service/db/database.go (0.0%)</option>
+				
+				<option value="file2">banking/gin-service/handlers/transfer.go (96.7%)</option>
+				
+				<option value="file3">banking/gin-service/main.go (0.0%)</option>
+				
+				<option value="file4">banking/gin-service/models/transfer.go (0.0%)</option>
+				
+				<option value="file5">banking/gin-service/temporal/activities/settlement_activity.go (92.3%)</option>
+				
+				<option value="file6">banking/gin-service/temporal/worker.go (41.7%)</option>
+				
+				<option value="file7">banking/gin-service/temporal/workflows/settlement_workflow.go (90.9%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package client
+
+import (
+        "bytes"
+        "encoding/json"
+        "fmt"
+        "io"
+        "log"
+        "net/http"
+        "os"
+        "time"                        
+)
+
+type CoreBankingClient struct {
+        baseURL    string
+        httpClient *http.Client
+}
+
+func NewCoreBankingClient() *CoreBankingClient <span class="cov8" title="1">{
+        baseURL := os.Getenv("SPRING_BOOT_URL")
+        if baseURL == "" </span><span class="cov8" title="1">{
+                baseURL = "http://localhost:8080"
+        }</span>
+        <span class="cov8" title="1">return &amp;CoreBankingClient{
+                baseURL:    baseURL,
+                httpClient: &amp;http.Client{Timeout: 5 * time.Second},
+        }</span>
+}
+
+type SettleTransferRequest struct {
+        FromAccount  string  `json:"fromAccount"`
+        ToAccount    string  `json:"toAccount"`
+        Amount       float64 `json:"amount"`
+        TransferMode string  `json:"transferMode"`
+        Tpin         string  `json:"tpin"`
+}
+
+type SettleTransferResponse struct {
+        ID           string  `json:"id"`
+        FromAccount  string  `json:"fromAccount"`
+        ToAccount    string  `json:"toAccount"`
+        Amount       float64 `json:"amount"`
+        TransferMode string  `json:"transferMode"`
+        Status       string  `json:"status"`
+}
+
+func (c *CoreBankingClient) SettleTransfer(fromAccount, toAccount string, amount float64, transferMode string, tpin string) (*SettleTransferResponse, error) <span class="cov8" title="1">{
+        payload := SettleTransferRequest{
+                FromAccount:  fromAccount,
+                ToAccount:    toAccount,
+                Amount:       amount,
+                TransferMode: transferMode,
+                Tpin:         tpin,
+        }
+
+        body, err := json.Marshal(payload)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to marshal request: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">resp, err := c.httpClient.Post(c.baseURL+"/transactions/settle", "application/json", bytes.NewBuffer(body))
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("core banking service unavailable: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("settlement failed with status: %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">respBody, err := io.ReadAll(resp.Body)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to read response: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">var result SettleTransferResponse
+        if err := json.Unmarshal(respBody, &amp;result); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to parse response: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">log.Printf("Settlement successful via CoreBankingClient: txn %s", result.ID)
+        return &amp;result, nil</span>
+}
+
+func (c *CoreBankingClient) GetTransaction(transactionID string) (map[string]interface{}, error) <span class="cov8" title="1">{
+        resp, err := c.httpClient.Get(c.baseURL + "/transactions/" + transactionID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("core banking service unavailable: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode == http.StatusNotFound </span><span class="cov8" title="1">{
+                return nil, nil
+        }</span>
+        <span class="cov8" title="1">if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("core banking returned status: %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">var result map[string]interface{}
+        if err := json.NewDecoder(resp.Body).Decode(&amp;result); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to parse response: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return result, nil</span>
+}</pre>
+		
+		<pre class="file" id="file1" style="display: none">package db
+
+import (
+        "fmt"
+        "log"
+        "os"
+
+        "gorm.io/driver/postgres"
+        "gorm.io/gorm"
+)
+
+var DB *gorm.DB
+
+func Connect() <span class="cov0" title="0">{
+        dsn := fmt.Sprintf(
+                "host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Kolkata",
+                getEnv("DB_HOST", "localhost"),
+                getEnv("DB_USERNAME", "postgres"),
+                getEnv("DB_PASSWORD", "password"),
+                getEnv("DB_NAME", "banking"),
+                getEnv("DB_PORT", "5432"),
+                getEnv("DB_SSLMODE", "disable"),
+        )
+
+        database, err := gorm.Open(postgres.Open(dsn), &amp;gorm.Config{})
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatal("Failed to connect to database:", err)
+        }</span>
+        <span class="cov0" title="0">DB = database
+
+        createSQL := `
+                CREATE TABLE IF NOT EXISTS transfers (
+                        id            UUID        PRIMARY KEY,
+                        from_account  UUID        NOT NULL,
+                        to_account    UUID        NOT NULL,
+                        amount        NUMERIC     NOT NULL,
+                        transfer_mode VARCHAR(20) NOT NULL,
+                        status        VARCHAR(20) NOT NULL,
+                        created_at    TIMESTAMPTZ DEFAULT now()
+                );
+        `
+        if err := DB.Exec(createSQL).Error; err != nil </span><span class="cov0" title="0">{
+                log.Fatal("Failed to migrate database:", err)
+        }</span>
+}
+
+func getEnv(key, fallback string) string <span class="cov0" title="0">{
+        if value := os.Getenv(key); value != "" </span><span class="cov0" title="0">{
+                return value
+        }</span>
+        <span class="cov0" title="0">return fallback</span>
+}</pre>
+		
+		<pre class="file" id="file2" style="display: none">package handlers
+
+import (
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "banking/gin-service/client"
+        "banking/gin-service/db"
+        "banking/gin-service/models"
+        temporalsetup "banking/gin-service/temporal"
+
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        temporalclient "go.temporal.io/sdk/client"
+)
+
+// TemporalClient is set by main.go after connecting to the Temporal server.
+// If nil (e.g. during unit tests or local dev without Temporal), the handler
+// falls back to the goroutine-based simulateSettlement.
+var TemporalClient temporalclient.Client
+
+type TransferRequest struct {
+        FromAccount  string  `json:"from_account" binding:"required"`
+        ToAccount    string  `json:"to_account" binding:"required"`
+        Amount       float64 `json:"amount" binding:"required,gt=0"`
+        TransferMode string  `json:"transfer_mode" binding:"required,oneof=NEFT RTGS IMPS"`
+        Tpin         string  `json:"tpin" binding:"required"`
+}
+
+func ProcessTransfer(c *gin.Context) <span class="cov8" title="1">{
+        ProcessTransferWithClient(c, client.NewCoreBankingClient())
+}</span>
+
+func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClient) <span class="cov8" title="1">{
+        var req TransferRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+        }</span>
+
+        <span class="cov8" title="1">fromID, err := uuid.Parse(req.FromAccount)
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from_account UUID"})
+                return
+        }</span>
+        <span class="cov8" title="1">toID, err := uuid.Parse(req.ToAccount)
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "invalid to_account UUID"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">transfer := models.Transfer{
+                ID:           uuid.New(),
+                FromAccount:  fromID,
+                ToAccount:    toID,
+                Amount:       req.Amount,
+                TransferMode: req.TransferMode,
+                Status:       getInitialStatus(req.TransferMode),
+        }
+
+        if result := db.DB.Create(&amp;transfer); result.Error != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.TransferMode == "IMPS" </span><span class="cov8" title="1">{
+                result, err := bankingClient.SettleTransfer(
+                        transfer.FromAccount.String(),
+                        transfer.ToAccount.String(),
+                        transfer.Amount,
+                        transfer.TransferMode,
+                        req.Tpin,
+                )
+                if err != nil </span><span class="cov8" title="1">{
+                        log.Printf("Failed to settle IMPS transfer: %v", err)
+                        db.DB.Model(&amp;transfer).Update("status", "FAILED")
+                        transfer.Status = "FAILED"
+                }</span> else<span class="cov8" title="1"> {
+                        db.DB.Model(&amp;transfer).Update("status", result.Status)
+                        transfer.Status = result.Status
+                }</span>
+                <span class="cov8" title="1">c.JSON(http.StatusAccepted, gin.H{
+                        "message":  fmt.Sprintf("%s transfer completed", req.TransferMode),
+                        "transfer": transfer,
+                })</span>
+        } else<span class="cov8" title="1"> {
+                // NEFT / RTGS — use Temporal for durable, crash-safe settlement
+                if TemporalClient != nil </span><span class="cov8" title="1">{
+                        temporalsetup.StartSettlementWorkflow(
+                                TemporalClient,
+                                transfer.ID.String(),
+                                transfer.FromAccount.String(),
+                                transfer.ToAccount.String(),
+                                transfer.Amount,
+                                transfer.TransferMode,
+                                req.Tpin,
+                        )
+                }</span> else<span class="cov8" title="1"> {
+                        // Fallback: goroutine-based settlement (used in tests and local dev
+                        // when Temporal server is not running)
+                        log.Printf("Warning: Temporal not connected — using goroutine fallback for %s transfer %s",
+                                req.TransferMode, transfer.ID)
+                        go simulateSettlement(transfer, bankingClient, req.Tpin)
+                }</span>
+                <span class="cov8" title="1">c.JSON(http.StatusAccepted, gin.H{
+                        "message":  fmt.Sprintf("%s transfer initiated", req.TransferMode),
+                        "transfer": transfer,
+                })</span>
+        }
+}
+
+func GetTransferStatus(c *gin.Context) <span class="cov8" title="1">{
+        id, err := uuid.Parse(c.Param("id"))
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "invalid transfer ID"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var transfer models.Transfer
+        if result := db.DB.First(&amp;transfer, "id = ?", id); result.Error != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusNotFound, gin.H{"error": "transfer not found"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, transfer)</span>
+}
+
+func GetAllTransfers(c *gin.Context) <span class="cov8" title="1">{
+        var transfers []models.Transfer
+        if result := db.DB.Order("created_at desc").Find(&amp;transfers); result.Error != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch transfers"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, transfers)</span>
+}
+
+func getInitialStatus(mode string) string <span class="cov8" title="1">{
+        switch mode </span>{
+        case "IMPS":<span class="cov8" title="1">
+                return "SUCCESS"</span>
+        case "NEFT":<span class="cov8" title="1">
+                return "PENDING"</span>
+        case "RTGS":<span class="cov8" title="1">
+                return "PROCESSING"</span>
+        default:<span class="cov8" title="1">
+                return "PENDING"</span>
+        }
+}
+
+// simulateSettlement is the goroutine-based fallback used when Temporal is unavailable.
+// Kept for backward compatibility with tests and local dev without a Temporal server.
+func simulateSettlement(transfer models.Transfer, bankingClient client.BankingClient, tpin string) <span class="cov8" title="1">{
+        switch transfer.TransferMode </span>{
+        case "NEFT":<span class="cov8" title="1">
+                time.Sleep(30 * time.Second)</span>
+        case "RTGS":<span class="cov8" title="1">
+                time.Sleep(15 * time.Second)</span>
+        }
+
+        <span class="cov8" title="1">result, err := bankingClient.SettleTransfer(
+                transfer.FromAccount.String(),
+                transfer.ToAccount.String(),
+                transfer.Amount,
+                transfer.TransferMode,
+                tpin,
+        )
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Failed to notify Spring Boot: %v", err)
+                db.DB.Model(&amp;transfer).Update("status", "FAILED")
+                log.Printf("%s transfer %s marked as FAILED", transfer.TransferMode, transfer.ID)
+                return
+        }</span>
+
+        <span class="cov8" title="1">db.DB.Model(&amp;transfer).Update("status", result.Status)
+        log.Printf("%s transfer %s settled with status: %s", transfer.TransferMode, transfer.ID, result.Status)</span>
+}</pre>
+		
+		<pre class="file" id="file3" style="display: none">package main
+
+import (
+        "log"
+        "os"
+
+        "banking/gin-service/db"
+        "banking/gin-service/handlers"
+        temporalsetup "banking/gin-service/temporal"
+
+        "github.com/gin-gonic/gin"
+        "github.com/joho/godotenv"
+        temporalclient "go.temporal.io/sdk/client"
+)
+
+func main() <span class="cov0" title="0">{
+        if err := godotenv.Load(); err != nil </span><span class="cov0" title="0">{
+                log.Println("No .env file found, using environment variables")
+        }</span>
+
+        <span class="cov0" title="0">db.Connect()
+
+        // Connect to Temporal server.
+        // TEMPORAL_HOST is set via docker-compose env (temporal:7233).
+        // Falls back to localhost:7233 for local dev.
+        temporalHost := os.Getenv("TEMPORAL_HOST")
+        if temporalHost == "" </span><span class="cov0" title="0">{
+                temporalHost = "localhost:7233"
+        }</span>
+
+        <span class="cov0" title="0">tc, err := temporalclient.Dial(temporalclient.Options{
+                HostPort: temporalHost,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                // Non-fatal: service still works, NEFT/RTGS fall back to goroutine settlement
+                log.Printf("Warning: could not connect to Temporal at %s (%v) — falling back to goroutine settlement",
+                        temporalHost, err)
+        }</span> else<span class="cov0" title="0"> {
+                defer tc.Close()
+                // Make the client available to the transfer handler
+                handlers.TemporalClient = tc
+                // Start the Temporal worker in the background
+                go temporalsetup.StartWorker(tc)
+                log.Println("Temporal client connected:", temporalHost)
+        }</span>
+
+        <span class="cov0" title="0">r := gin.Default()
+
+        r.GET("/health", func(c *gin.Context) </span><span class="cov0" title="0">{
+                c.JSON(200, gin.H{"status": "gin-service running"})
+        }</span>)
+
+        <span class="cov0" title="0">r.POST("/process-transfer", handlers.ProcessTransfer)
+        r.GET("/transfer/:id", handlers.GetTransferStatus)
+        r.GET("/transfers", handlers.GetAllTransfers)
+
+        log.Println("Gin Transfer Service running on :8081")
+        r.Run(":8081")</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package models
+
+import (
+        "time"
+
+        "github.com/google/uuid"
+        "gorm.io/gorm"
+)
+
+type Transfer struct {
+        ID           uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+        FromAccount  uuid.UUID `gorm:"type:uuid;not null" json:"from_account"`
+        ToAccount    uuid.UUID `gorm:"type:uuid;not null" json:"to_account"`
+        Amount       float64   `gorm:"not null" json:"amount"`
+        TransferMode string    `gorm:"type:varchar(20);not null" json:"transfer_mode"`
+        Status       string    `gorm:"type:varchar(20);not null" json:"status"`
+        CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
+}
+
+func (t *Transfer) BeforeCreate(tx *gorm.DB) error <span class="cov0" title="0">{
+        t.ID = uuid.New()
+        return nil
+}</span>                </pre>
+		
+		<pre class="file" id="file5" style="display: none">package activities
+
+import (
+        "context"
+        "fmt"
+        "log"
+
+        "banking/gin-service/client"
+        "banking/gin-service/db"
+        "banking/gin-service/models"
+
+        "github.com/google/uuid"
+)
+
+// SettlementActivity holds the dependencies needed to settle a transfer.
+// The BankingClient is injected when the worker registers this activity.
+type SettlementActivity struct {
+        BankingClient client.BankingClient
+}
+
+// SettlementInput is the data payload passed into the workflow and activity.
+// All fields must be serializable (no UUIDs — use strings).
+type SettlementInput struct {
+        TransferID   string
+        FromAccount  string
+        ToAccount    string
+        Amount       float64
+        TransferMode string
+        Tpin         string
+}
+
+// SettleTransfer is the Temporal activity called after the settlement delay.
+// It calls Spring Boot /transactions/settle, then updates the Gin DB record.
+// If it returns a non-nil error, Temporal will automatically retry it
+// up to the MaximumAttempts configured in the workflow's RetryPolicy.
+func (a *SettlementActivity) SettleTransfer(ctx context.Context, input SettlementInput) error <span class="cov8" title="1">{
+        result, err := a.BankingClient.SettleTransfer(
+                input.FromAccount,
+                input.ToAccount,
+                input.Amount,
+                input.TransferMode,
+                input.Tpin,
+        )
+
+        // Determine final status — default to FAILED if Spring Boot errored
+        status := "FAILED"
+        if err == nil &amp;&amp; result != nil </span><span class="cov8" title="1">{
+                status = result.Status
+        }</span>
+
+        // Update Gin DB regardless of settlement outcome
+        <span class="cov8" title="1">transferID, parseErr := uuid.Parse(input.TransferID)
+        if parseErr != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid transfer ID %q: %w", input.TransferID, parseErr)
+        }</span>
+
+        <span class="cov8" title="1">if dbErr := db.DB.Model(&amp;models.Transfer{}).
+                Where("id = ?", transferID).
+                Update("status", status).Error; dbErr != nil </span><span class="cov0" title="0">{
+                log.Printf("Temporal activity: failed to update transfer %s in DB: %v", input.TransferID, dbErr)
+        }</span>
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                // Return the error so Temporal retries this activity
+                return fmt.Errorf("spring boot settlement failed for transfer %s: %w", input.TransferID, err)
+        }</span>
+
+        <span class="cov8" title="1">log.Printf("Temporal activity: %s transfer %s settled with status: %s",
+                input.TransferMode, input.TransferID, status)
+        return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package temporalsetup
+
+import (
+        "context"
+        "log"
+
+        "banking/gin-service/client"
+        "banking/gin-service/temporal/activities"
+        "banking/gin-service/temporal/workflows"
+
+        temporalclient "go.temporal.io/sdk/client"
+        "go.temporal.io/sdk/worker"
+)
+
+// TaskQueue is the Temporal task queue name.
+// The worker and the workflow starter must use the same queue name.
+const TaskQueue = "settlement-task-queue"
+
+// StartWorker registers all workflows and activities, then starts polling
+// the Temporal server for tasks. Call this in a goroutine from main.go.
+func StartWorker(tc temporalclient.Client) <span class="cov0" title="0">{
+        // Inject the real Spring Boot client into the activity
+        act := &amp;activities.SettlementActivity{
+                BankingClient: client.NewCoreBankingClient(),
+        }
+
+        w := worker.New(tc, TaskQueue, worker.Options{})
+        w.RegisterWorkflow(workflows.SettlementWorkflow)
+        w.RegisterActivity(act) // registers all methods on the struct
+
+        if err := w.Start(); err != nil </span><span class="cov0" title="0">{
+                log.Fatal("Temporal: failed to start worker:", err)
+        }</span>
+        <span class="cov0" title="0">log.Println("Temporal: worker started, listening on queue:", TaskQueue)</span>
+}
+
+// StartSettlementWorkflow kicks off a SettlementWorkflow for a NEFT or RTGS transfer.
+// Uses a deterministic workflow ID so duplicate starts are safely deduplicated by Temporal.
+// Called from the transfer handler after the DB record is created.
+func StartSettlementWorkflow(
+        tc temporalclient.Client,
+        transferID, fromAccount, toAccount string,
+        amount float64,
+        transferMode, tpin string,
+) <span class="cov8" title="1">{
+        _, err := tc.ExecuteWorkflow(
+                context.Background(),
+                temporalclient.StartWorkflowOptions{
+                        ID:        "settlement-" + transferID, // unique, idempotent workflow ID
+                        TaskQueue: TaskQueue,
+                },
+                workflows.SettlementWorkflow,
+                workflows.SettlementWorkflowInput{
+                        TransferID:   transferID,
+                        FromAccount:  fromAccount,
+                        ToAccount:    toAccount,
+                        Amount:       amount,
+                        TransferMode: transferMode,
+                        Tpin:         tpin,
+                },
+        )
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Temporal: failed to start %s settlement workflow for transfer %s: %v",
+                        transferMode, transferID, err)
+                return
+        }</span>
+        <span class="cov8" title="1">log.Printf("Temporal: started %s settlement workflow for transfer %s", transferMode, transferID)</span>
+}
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package workflows
+
+import (
+        "fmt"
+        "time"
+
+        "banking/gin-service/temporal/activities"
+
+        "go.temporal.io/sdk/temporal"
+        "go.temporal.io/sdk/workflow"
+)
+
+// SettlementWorkflowInput is the data passed into the workflow when it is started.
+type SettlementWorkflowInput struct {
+        TransferID   string
+        FromAccount  string
+        ToAccount    string
+        Amount       float64
+        TransferMode string
+        Tpin         string
+}
+
+// SettlementWorkflow is the durable Temporal workflow for NEFT and RTGS settlement.
+//
+// Key advantage over time.Sleep in a goroutine:
+//   - workflow.Sleep is checkpointed — if the container crashes during the wait,
+//     Temporal resumes exactly from where it left off when the worker restarts.
+//   - The activity has automatic retries if Spring Boot is temporarily unavailable.
+func SettlementWorkflow(ctx workflow.Context, input SettlementWorkflowInput) error <span class="cov8" title="1">{
+        // Simulate real-world banking settlement windows
+        var delay time.Duration
+        switch input.TransferMode </span>{
+        case "NEFT":<span class="cov8" title="1">
+                delay = 30 * time.Second</span> // represents a 30-minute NEFT batch window
+        case "RTGS":<span class="cov8" title="1">
+                delay = 15 * time.Second</span> // represents near-real-time RTGS high-value settlement
+        default:<span class="cov8" title="1">
+                return fmt.Errorf("unsupported transfer mode for settlement workflow: %s", input.TransferMode)</span>
+        }
+
+        // Durable sleep — this is the core value of Temporal over a goroutine
+        <span class="cov8" title="1">if err := workflow.Sleep(ctx, delay); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Configure the activity with a retry policy
+        <span class="cov8" title="1">ao := workflow.ActivityOptions{
+                StartToCloseTimeout: 30 * time.Second,
+                RetryPolicy: &amp;temporal.RetryPolicy{
+                        MaximumAttempts: 3,
+                },
+        }
+        ctx = workflow.WithActivityOptions(ctx, ao)
+
+        // Execute the settlement activity.
+        // Using a typed nil pointer is the standard Temporal Go SDK pattern
+        // for referencing a struct method without binding to a specific instance.
+        var act *activities.SettlementActivity
+        return workflow.ExecuteActivity(ctx, act.SettleTransfer, activities.SettlementInput{
+                TransferID:   input.TransferID,
+                FromAccount:  input.FromAccount,
+                ToAccount:    input.ToAccount,
+                Amount:       input.Amount,
+                TransferMode: input.TransferMode,
+                Tpin:         input.Tpin,
+        }).Get(ctx, nil)</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
