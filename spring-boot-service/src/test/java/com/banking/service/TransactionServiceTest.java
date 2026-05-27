@@ -161,7 +161,8 @@ public class TransactionServiceTest
 
         when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
 
-        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS")))).thenReturn(mockTransaction);
+        Transaction expectedTxn = Transaction.builder().id(UUID.randomUUID()).fromAccount(fromId).toAccount(toId).amount(new BigDecimal("5000.00")).transferMode("NEFT").status("SUCCESS").build();
+        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS") && txn.getAmount().compareTo(new BigDecimal("5000.00")) == 0))).thenReturn(expectedTxn);
 
         Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("5000.00"), "NEFT", "1234");
 

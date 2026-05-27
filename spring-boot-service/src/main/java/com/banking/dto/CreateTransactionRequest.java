@@ -10,6 +10,9 @@ import java.util.UUID;
 
 @Data
 public class CreateTransactionRequest {
+    public interface SettlementRequest {
+    }
+
     @NotNull(message = "From account is required")
     private UUID fromAccount;
 
@@ -24,6 +27,6 @@ public class CreateTransactionRequest {
     private String transferMode;
 
     private String status = "PENDING";
-    @NotBlank(message = "TPIN is required for settlement")
+    @NotBlank(message = "TPIN is required for settlement", groups = SettlementRequest.class)
     private String tpin;
 }

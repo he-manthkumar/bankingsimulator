@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.banking.dto.CreateTransactionRequest;
 import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -32,7 +33,8 @@ public class TransactionController {
     }
 
     @PostMapping("/settle")
-    public ResponseEntity<Transaction> settleTransfer(@Valid @RequestBody CreateTransactionRequest body) {
+    public ResponseEntity<Transaction> settleTransfer(
+            @Validated(CreateTransactionRequest.SettlementRequest.class) @RequestBody CreateTransactionRequest body) {
         UUID fromAccount = body.getFromAccount();
         UUID toAccount = body.getToAccount();
         BigDecimal amount = body.getAmount();
