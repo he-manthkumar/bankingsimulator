@@ -28,7 +28,7 @@ func SettlementWorkflow(ctx workflow.Context, input SettlementWorkflowInput) err
 	case "RTGS":
 		delay = 15 * time.Second 
 	default:
-		return fmt.Errorf("unsupported transfer mode for settlement workflow: %s", input.TransferMode)
+		return fmt.Errorf("unsupported transfer mode for settlement of Transfer: %s", input.TransferMode)
 	}
 
 	if err := workflow.Sleep(ctx, delay); err != nil {
@@ -36,9 +36,11 @@ func SettlementWorkflow(ctx workflow.Context, input SettlementWorkflowInput) err
 	}
 
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 30 * time.Second,
+		StartToCloseTimeout: 40 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 3,
+			MaximumAttempts: 0,
+			InitialInterval: 5 * time.Second,
+			BackoffCoefficient: 2.0,
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)

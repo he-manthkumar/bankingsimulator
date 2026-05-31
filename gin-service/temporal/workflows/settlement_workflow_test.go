@@ -23,30 +23,52 @@ func newInput(mode string) SettlementWorkflowInput {
 	}
 }
 
+func newEnv(t *testing.T) *testsuite.TestWorkflowEnvironment {
+	t.Helper()
+	testSuite := &testsuite.WorkflowTestSuite{}
+	return testSuite.NewTestWorkflowEnvironment()
+}
+
+
+func expectedActivity(input SettlementWorkflowInput) activities.SettlementInput {
+	return activities.SettlementInput{
+		TransferID:   input.TransferID,
+		FromAccount:  input.FromAccount,
+		ToAccount:    input.ToAccount,
+		Amount:       input.Amount,
+		TransferMode: input.TransferMode,
+		Tpin:         input.Tpin,
+	}
+}
 
 func TestSettlementWorkflow_shouldCompleteSuccessfullyForNEFT(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
+	env := newEnv(t)
+	input := newInput("NEFT")
 
 	var act *activities.SettlementActivity
-	env.OnActivity(act.SettleTransfer, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(act.SettleTransfer,
+		mock.Anything,           
+		expectedActivity(input),  
+	).Return(nil)
 
-	env.ExecuteWorkflow(SettlementWorkflow, newInput("NEFT"))
+	env.ExecuteWorkflow(SettlementWorkflow, input)
 
 	assert.True(t, env.IsWorkflowCompleted())
 	assert.NoError(t, env.GetWorkflowError())
 }
 
+
 func TestSettlementWorkflow_shouldMarkNEFTAsFailedWhenActivityReturnsError(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
+	env := newEnv(t)
+	input := newInput("NEFT")
 
 	var act *activities.SettlementActivity
+	env.OnActivity(act.SettleTransfer,
+		mock.Anything,
+		expectedActivity(input),
+	).Return(errors.New("spring boot down"))
 
-	env.OnActivity(act.SettleTransfer, mock.Anything, mock.Anything).
-		Return(errors.New("spring boot down"))
-
-	env.ExecuteWorkflow(SettlementWorkflow, newInput("NEFT"))
+	env.ExecuteWorkflow(SettlementWorkflow, input)
 
 	assert.True(t, env.IsWorkflowCompleted())
 	assert.Error(t, env.GetWorkflowError())
@@ -54,27 +76,32 @@ func TestSettlementWorkflow_shouldMarkNEFTAsFailedWhenActivityReturnsError(t *te
 
 
 func TestSettlementWorkflow_shouldCompleteSuccessfullyForRTGS(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
+	env := newEnv(t)
+	input := newInput("RTGS")
 
 	var act *activities.SettlementActivity
-	env.OnActivity(act.SettleTransfer, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(act.SettleTransfer,
+		mock.Anything,
+		expectedActivity(input),
+	).Return(nil)
 
-	env.ExecuteWorkflow(SettlementWorkflow, newInput("RTGS"))
+	env.ExecuteWorkflow(SettlementWorkflow, input)
 
 	assert.True(t, env.IsWorkflowCompleted())
 	assert.NoError(t, env.GetWorkflowError())
 }
 
 func TestSettlementWorkflow_shouldMarkRTGSAsFailedWhenActivityReturnsError(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
+	env := newEnv(t)
+	input := newInput("RTGS")
 
 	var act *activities.SettlementActivity
-	env.OnActivity(act.SettleTransfer, mock.Anything, mock.Anything).
-		Return(errors.New("core banking unavailable"))
+	env.OnActivity(act.SettleTransfer,
+		mock.Anything,
+		expectedActivity(input),
+	).Return(errors.New("core banking unavailable"))
 
-	env.ExecuteWorkflow(SettlementWorkflow, newInput("RTGS"))
+	env.ExecuteWorkflow(SettlementWorkflow, input)
 
 	assert.True(t, env.IsWorkflowCompleted())
 	assert.Error(t, env.GetWorkflowError())
@@ -82,8 +109,7 @@ func TestSettlementWorkflow_shouldMarkRTGSAsFailedWhenActivityReturnsError(t *te
 
 
 func TestSettlementWorkflow_shouldReturnErrorForUnsupportedTransferMode(t *testing.T) {
-	testSuite := &testsuite.WorkflowTestSuite{}
-	env := testSuite.NewTestWorkflowEnvironment()
+	env := newEnv(t)
 	env.ExecuteWorkflow(SettlementWorkflow, newInput("IMPS"))
 
 	assert.True(t, env.IsWorkflowCompleted())

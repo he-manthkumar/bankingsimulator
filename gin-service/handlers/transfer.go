@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,9 +18,6 @@ import (
 	temporalclient "go.temporal.io/sdk/client"
 )
 
-// TemporalClient is set by main.go after connecting to the Temporal server.
-// If nil (e.g. during unit tests or local dev without Temporal), the handler
-// falls back to the goroutine-based simulateSettlement.
 var TemporalClient temporalclient.Client
 
 type TransferRequest struct {
@@ -52,7 +51,6 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 	}
 
 	transfer := models.Transfer{
-		ID:           uuid.New(),
 		FromAccount:  fromID,
 		ToAccount:    toID,
 		Amount:       req.Amount,
@@ -60,8 +58,9 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 		Status:       getInitialStatus(req.TransferMode),
 	}
 
-	if result := db.DB.Create(&transfer); result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+	ctx := c.Request.Context()
+	if err := db.Repo.Create(ctx, &transfer); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -75,10 +74,10 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 		)
 		if err != nil {
 			log.Printf("Failed to settle IMPS transfer: %v", err)
-			db.DB.Model(&transfer).Update("status", "FAILED")
+			db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
 			transfer.Status = "FAILED"
 		} else {
-			db.DB.Model(&transfer).Update("status", result.Status)
+			db.Repo.UpdateStatus(context.Background(), transfer.ID, result.Status)
 			transfer.Status = result.Status
 		}
 		c.JSON(http.StatusAccepted, gin.H{
@@ -86,7 +85,6 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 			"transfer": transfer,
 		})
 	} else {
-		// NEFT / RTGS — use Temporal for durable, crash-safe settlement
 		if TemporalClient != nil {
 			temporalsetup.StartSettlementWorkflow(
 				TemporalClient,
@@ -98,8 +96,6 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 				req.Tpin,
 			)
 		} else {
-			// Fallback: goroutine-based settlement (used in tests and local dev
-			// when Temporal server is not running)
 			log.Printf("Warning: Temporal not connected — using goroutine fallback for %s transfer %s",
 				req.TransferMode, transfer.ID)
 			go simulateSettlement(transfer, bankingClient, req.Tpin)
@@ -118,9 +114,13 @@ func GetTransferStatus(c *gin.Context) {
 		return
 	}
 
-	var transfer models.Transfer
-	if result := db.DB.First(&transfer, "id = ?", id); result.Error != nil {
+	transfer, err := db.Repo.FindByID(c.Request.Context(), id)
+	if errors.Is(err, db.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "transfer not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -128,12 +128,11 @@ func GetTransferStatus(c *gin.Context) {
 }
 
 func GetAllTransfers(c *gin.Context) {
-	var transfers []models.Transfer
-	if result := db.DB.Order("created_at desc").Find(&transfers); result.Error != nil {
+	transfers, err := db.Repo.FindAll(c.Request.Context())
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch transfers"})
 		return
 	}
-
 	c.JSON(http.StatusOK, transfers)
 }
 
@@ -150,8 +149,6 @@ func getInitialStatus(mode string) string {
 	}
 }
 
-// simulateSettlement is the goroutine-based fallback used when Temporal is unavailable.
-// Kept for backward compatibility with tests and local dev without a Temporal server.
 func simulateSettlement(transfer models.Transfer, bankingClient client.BankingClient, tpin string) {
 	switch transfer.TransferMode {
 	case "NEFT":
@@ -169,11 +166,11 @@ func simulateSettlement(transfer models.Transfer, bankingClient client.BankingCl
 	)
 	if err != nil {
 		log.Printf("Failed to notify Spring Boot: %v", err)
-		db.DB.Model(&transfer).Update("status", "FAILED")
+		db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
 		log.Printf("%s transfer %s marked as FAILED", transfer.TransferMode, transfer.ID)
 		return
 	}
 
-	db.DB.Model(&transfer).Update("status", result.Status)
+	db.Repo.UpdateStatus(context.Background(), transfer.ID, result.Status)
 	log.Printf("%s transfer %s settled with status: %s", transfer.TransferMode, transfer.ID, result.Status)
 }

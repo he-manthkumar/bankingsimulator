@@ -66,6 +66,23 @@ func TestStartSettlementWorkflow_shouldNotPanicWhenTemporalReturnsError(t *testi
 	})
 }
 
+type capturingTemporalClient struct {
+	temporalclient.Client
+	lastTaskQueue string
+}
+
+func (c *capturingTemporalClient) ExecuteWorkflow(
+	_ context.Context,
+	opts temporalclient.StartWorkflowOptions,
+	_ interface{},
+	_ ...interface{},
+) (temporalclient.WorkflowRun, error) {
+	c.lastTaskQueue = opts.TaskQueue
+	return nil, nil
+}
+
+func (c *capturingTemporalClient) Close() {}
+
 func TestStartSettlementWorkflow_shouldUseTaskQueueConstant(t *testing.T) {
 	var capturedQueue string
 
@@ -85,19 +102,4 @@ func TestStartSettlementWorkflow_shouldUseTaskQueueConstant(t *testing.T) {
 		"workflow must use the TaskQueue constant so worker and starter stay in sync")
 }
 
-type capturingTemporalClient struct {
-	temporalclient.Client
-	lastTaskQueue string
-}
 
-func (c *capturingTemporalClient) ExecuteWorkflow(
-	_ context.Context,
-	opts temporalclient.StartWorkflowOptions,
-	_ interface{},
-	_ ...interface{},
-) (temporalclient.WorkflowRun, error) {
-	c.lastTaskQueue = opts.TaskQueue
-	return nil, nil
-}
-
-func (c *capturingTemporalClient) Close() {}

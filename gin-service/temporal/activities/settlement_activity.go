@@ -7,7 +7,6 @@ import (
 
 	"banking/gin-service/client"
 	"banking/gin-service/db"
-	"banking/gin-service/models"
 
 	"github.com/google/uuid"
 )
@@ -42,14 +41,11 @@ func (a *SettlementActivity) SettleTransfer(ctx context.Context, input Settlemen
 		return fmt.Errorf("invalid transfer ID %q: %w", input.TransferID, parseErr)
 	}
 
-	if dbErr := db.DB.Model(&models.Transfer{}).
-		Where("id = ?", transferID).
-		Update("status", status).Error; dbErr != nil {
+	if dbErr := db.Repo.UpdateStatus(ctx, transferID, status); dbErr != nil {
 		log.Printf("Temporal activity: failed to update transfer %s in DB: %v", input.TransferID, dbErr)
 	}
 
 	if err != nil {
-
 		return fmt.Errorf("spring boot settlement failed for transfer %s: %w", input.TransferID, err)
 	}
 

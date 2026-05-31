@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type Transfer struct {
@@ -16,8 +15,3 @@ type Transfer struct {
 	Status       string    `gorm:"type:varchar(20);not null" json:"status"`
 	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
 }
-
-func (t *Transfer) BeforeCreate(tx *gorm.DB) error {
-	t.ID = uuid.New()
-	return nil
-}		

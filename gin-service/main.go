@@ -20,9 +20,6 @@ func main() {
 
 	db.Connect()
 
-	// Connect to Temporal server.
-	// TEMPORAL_HOST is set via docker-compose env (temporal:7233).
-	// Falls back to localhost:7233 for local dev.
 	temporalHost := os.Getenv("TEMPORAL_HOST")
 	if temporalHost == "" {
 		temporalHost = "localhost:7233"
@@ -32,14 +29,13 @@ func main() {
 		HostPort: temporalHost,
 	})
 	if err != nil {
-		// Non-fatal: service still works, NEFT/RTGS fall back to goroutine settlement
 		log.Printf("Warning: could not connect to Temporal at %s (%v) — falling back to goroutine settlement",
 			temporalHost, err)
 	} else {
 		defer tc.Close()
-		// Make the client available to the transfer handler
+
 		handlers.TemporalClient = tc
-		// Start the Temporal worker in the background
+
 		go temporalsetup.StartWorker(tc)
 		log.Println("Temporal client connected:", temporalHost)
 	}

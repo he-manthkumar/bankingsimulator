@@ -3,18 +3,18 @@ package activities
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"banking/gin-service/client"
 	"banking/gin-service/db"
 	"banking/gin-service/models"
 
-	"github.com/glebarez/sqlite"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
-
 
 type mockBankingClient struct {
 	result *client.SettleTransferResponse
@@ -27,14 +27,28 @@ func (m *mockBankingClient) SettleTransfer(from, to string, amount float64, mode
 
 func setupTestDB(t *testing.T) {
 	t.Helper()
-	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+
+	uri := os.Getenv("MONGO_URI")
+	if uri == "" {
+		uri = "mongodb://localhost:27017"
+	}
+
+	mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
-		t.Fatalf("failed to open test db: %v", err)
+		t.Fatalf("failed to connect to MongoDB: %v", err)
 	}
-	if err := database.AutoMigrate(&models.Transfer{}); err != nil {
-		t.Fatalf("failed to migrate test db: %v", err)
+	if err := mongoClient.Ping(context.Background(), nil); err != nil {
+		t.Fatalf("MongoDB ping failed — is MongoDB running? %v", err)
 	}
-	db.DB = database
+
+	colName := "transfers_" + uuid.New().String()[:8]
+	col := mongoClient.Database("banking_test").Collection(colName)
+	db.Repo = &db.MongoTransferRepo{Col: col}
+
+	t.Cleanup(func() {
+		col.Drop(context.Background())
+		mongoClient.Disconnect(context.Background())
+	})
 }
 
 func seedTransfer(t *testing.T, mode, status string) models.Transfer {
@@ -47,10 +61,11 @@ func seedTransfer(t *testing.T, mode, status string) models.Transfer {
 		TransferMode: mode,
 		Status:       status,
 	}
-	db.DB.Create(&transfer)
+	if err := db.Repo.Create(context.Background(), &transfer); err != nil {
+		t.Fatalf("failed to seed transfer: %v", err)
+	}
 	return transfer
 }
-
 
 func TestSettleTransfer_shouldUpdateStatusToSuccessWhenBankingClientSucceeds(t *testing.T) {
 	setupTestDB(t)
@@ -73,8 +88,8 @@ func TestSettleTransfer_shouldUpdateStatusToSuccessWhenBankingClientSucceeds(t *
 
 	assert.NoError(t, err)
 
-	var updated models.Transfer
-	db.DB.First(&updated, "id = ?", transfer.ID)
+	updated, findErr := db.Repo.FindByID(context.Background(), transfer.ID)
+	assert.NoError(t, findErr)
 	assert.Equal(t, "SUCCESS", updated.Status)
 }
 
@@ -99,8 +114,8 @@ func TestSettleTransfer_shouldUpdateStatusToFailedAndReturnErrorWhenBankingClien
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "spring boot settlement failed")
 
-	var updated models.Transfer
-	db.DB.First(&updated, "id = ?", transfer.ID)
+	updated, findErr := db.Repo.FindByID(context.Background(), transfer.ID)
+	assert.NoError(t, findErr)
 	assert.Equal(t, "FAILED", updated.Status)
 }
 
@@ -148,7 +163,7 @@ func TestSettleTransfer_shouldUpdateStatusToFailedWhenBankingClientReturnsNilRes
 
 	assert.Error(t, err)
 
-	var updated models.Transfer
-	db.DB.First(&updated, "id = ?", transfer.ID)
+	updated, findErr := db.Repo.FindByID(context.Background(), transfer.ID)
+	assert.NoError(t, findErr)
 	assert.Equal(t, "FAILED", updated.Status)
 }
