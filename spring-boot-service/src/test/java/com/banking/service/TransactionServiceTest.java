@@ -157,11 +157,19 @@ public class TransactionServiceTest
     @Test
     void test_settleTransfer_shouldReturnSuccessWhenAmountEqualsExactBalance() 
     {
+        Transaction exactBalanceTxn = Transaction.builder()
+            .id(UUID.randomUUID())
+            .fromAccount(fromId)
+            .toAccount(toId)
+            .amount(new BigDecimal("5000.00")) 
+            .transferMode("NEFT")
+            .status("SUCCESS")
+            .build();
+
         when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
-
         when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS")))).thenReturn(mockTransaction);
+        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS"))))
+            .thenReturn(exactBalanceTxn);  
 
         Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("5000.00"), "NEFT", "1234");
 

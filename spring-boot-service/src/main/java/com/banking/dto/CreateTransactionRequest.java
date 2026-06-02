@@ -24,6 +24,6 @@ public class CreateTransactionRequest {
     private String transferMode;
 
     private String status = "PENDING";
-    @NotBlank(message = "TPIN is required for settlement")
+    
     private String tpin;
 }

@@ -1,0 +1,783 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>client: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">banking/gin-service/client/core_banking_client.go (94.1%)</option>
+				
+				<option value="file1">banking/gin-service/db/database.go (0.0%)</option>
+				
+				<option value="file2">banking/gin-service/handlers/transfer.go (94.2%)</option>
+				
+				<option value="file3">banking/gin-service/main.go (0.0%)</option>
+				
+				<option value="file4">banking/gin-service/temporal/activities/settlement_activity.go (92.3%)</option>
+				
+				<option value="file5">banking/gin-service/temporal/worker.go (84.6%)</option>
+				
+				<option value="file6">banking/gin-service/temporal/workflows/settlement_workflow.go (90.9%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package client
+
+import (
+        "bytes"
+        "encoding/json"
+        "fmt"
+        "io"
+        "log"
+        "net/http"
+        "os"
+        "time"                        
+)
+
+type CoreBankingClient struct {
+        baseURL    string
+        httpClient *http.Client
+}
+
+func NewCoreBankingClient() *CoreBankingClient <span class="cov8" title="1">{
+        baseURL := os.Getenv("SPRING_BOOT_URL")
+        if baseURL == "" </span><span class="cov8" title="1">{
+                baseURL = "http://localhost:8080"
+        }</span>
+        <span class="cov8" title="1">return &amp;CoreBankingClient{
+                baseURL:    baseURL,
+                httpClient: &amp;http.Client{Timeout: 5 * time.Second},
+        }</span>
+}
+
+type SettleTransferRequest struct {
+        FromAccount  string  `json:"fromAccount"`
+        ToAccount    string  `json:"toAccount"`
+        Amount       float64 `json:"amount"`
+        TransferMode string  `json:"transferMode"`
+        Tpin         string  `json:"tpin"`
+}
+
+type SettleTransferResponse struct {
+        ID           string  `json:"id"`
+        FromAccount  string  `json:"fromAccount"`
+        ToAccount    string  `json:"toAccount"`
+        Amount       float64 `json:"amount"`
+        TransferMode string  `json:"transferMode"`
+        Status       string  `json:"status"`
+}
+
+func (c *CoreBankingClient) SettleTransfer(fromAccount, toAccount string, amount float64, transferMode string, tpin string) (*SettleTransferResponse, error) <span class="cov8" title="1">{
+        payload := SettleTransferRequest{
+                FromAccount:  fromAccount,
+                ToAccount:    toAccount,
+                Amount:       amount,
+                TransferMode: transferMode,
+                Tpin:         tpin,
+        }
+
+        body, err := json.Marshal(payload)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to marshal request: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">resp, err := c.httpClient.Post(c.baseURL+"/transactions/settle", "application/json", bytes.NewBuffer(body))
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("core banking service unavailable: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("settlement failed with status: %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">respBody, err := io.ReadAll(resp.Body)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to read response: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">var result SettleTransferResponse
+        if err := json.Unmarshal(respBody, &amp;result); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to parse response: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">log.Printf("Settlement successful via CoreBankingClient: txn %s", result.ID)
+        return &amp;result, nil</span>
+}
+
+func (c *CoreBankingClient) GetTransaction(transactionID string) (map[string]interface{}, error) <span class="cov8" title="1">{
+        resp, err := c.httpClient.Get(c.baseURL + "/transactions/" + transactionID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("core banking service unavailable: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode == http.StatusNotFound </span><span class="cov8" title="1">{
+                return nil, nil
+        }</span>
+        <span class="cov8" title="1">if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("core banking returned status: %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">var result map[string]interface{}
+        if err := json.NewDecoder(resp.Body).Decode(&amp;result); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to parse response: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return result, nil</span>
+}</pre>
+		
+		<pre class="file" id="file1" style="display: none">package db
+
+import (
+        "context"
+        "errors"
+        "log"
+        "os"
+        "time"
+
+        "banking/gin-service/models"
+
+        "github.com/google/uuid"
+        "go.mongodb.org/mongo-driver/bson"
+        "go.mongodb.org/mongo-driver/mongo"
+        "go.mongodb.org/mongo-driver/mongo/options"
+)
+
+var ErrNotFound = errors.New("transfer not found")
+
+type TransferRepository interface {
+        Create(ctx context.Context, t *models.Transfer) error
+        FindByID(ctx context.Context, id uuid.UUID) (*models.Transfer, error)
+        UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
+        FindAll(ctx context.Context) ([]models.Transfer, error)
+}
+
+var Repo TransferRepository
+
+type mongoTransfer struct {
+        ID           string    `bson:"_id"`
+        FromAccount  string    `bson:"from_account"`
+        ToAccount    string    `bson:"to_account"`
+        Amount       float64   `bson:"amount"`
+        TransferMode string    `bson:"transfer_mode"`
+        Status       string    `bson:"status"`
+        CreatedAt    time.Time `bson:"created_at"`
+}
+
+func toMongo(t *models.Transfer) mongoTransfer <span class="cov0" title="0">{
+        return mongoTransfer{
+                ID:           t.ID.String(),
+                FromAccount:  t.FromAccount.String(),
+                ToAccount:    t.ToAccount.String(),
+                Amount:       t.Amount,
+                TransferMode: t.TransferMode,
+                Status:       t.Status,
+                CreatedAt:    t.CreatedAt,
+        }
+}</span>
+
+func fromMongo(m mongoTransfer) models.Transfer <span class="cov0" title="0">{
+        return models.Transfer{
+                ID:           uuid.MustParse(m.ID),
+                FromAccount:  uuid.MustParse(m.FromAccount),
+                ToAccount:    uuid.MustParse(m.ToAccount),
+                Amount:       m.Amount,
+                TransferMode: m.TransferMode,
+                Status:       m.Status,
+                CreatedAt:    m.CreatedAt,
+        }
+}</span>
+
+type MongoTransferRepo struct {
+        Col *mongo.Collection
+}
+
+func (r *MongoTransferRepo) Create(ctx context.Context, t *models.Transfer) error <span class="cov0" title="0">{
+        if t.ID == uuid.Nil </span><span class="cov0" title="0">{
+                t.ID = uuid.New()
+        }</span>
+        <span class="cov0" title="0">if t.CreatedAt.IsZero() </span><span class="cov0" title="0">{
+                t.CreatedAt = time.Now()
+        }</span>
+        <span class="cov0" title="0">_, err := r.Col.InsertOne(ctx, toMongo(t))
+        return err</span>
+}
+
+func (r *MongoTransferRepo) FindByID(ctx context.Context, id uuid.UUID) (*models.Transfer, error) <span class="cov0" title="0">{
+        var m mongoTransfer
+        err := r.Col.FindOne(ctx, bson.M{"_id": id.String()}).Decode(&amp;m)
+        if errors.Is(err, mongo.ErrNoDocuments) </span><span class="cov0" title="0">{
+                return nil, ErrNotFound
+        }</span>
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">t := fromMongo(m)
+        return &amp;t, nil</span>
+}
+
+func (r *MongoTransferRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error <span class="cov0" title="0">{
+        _, err := r.Col.UpdateOne(ctx,
+                bson.M{"_id": id.String()},
+                bson.M{"$set": bson.M{"status": status}},
+        )
+        return err
+}</span>
+
+func (r *MongoTransferRepo) FindAll(ctx context.Context) ([]models.Transfer, error) <span class="cov0" title="0">{
+        opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+        cursor, err := r.Col.Find(ctx, bson.M{}, opts)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">defer cursor.Close(ctx)
+        var docs []mongoTransfer
+        if err := cursor.All(ctx, &amp;docs); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">transfers := make([]models.Transfer, len(docs))
+        for i, d := range docs </span><span class="cov0" title="0">{
+                transfers[i] = fromMongo(d)
+        }</span>
+        <span class="cov0" title="0">return transfers, nil</span>
+}
+
+func Connect() <span class="cov0" title="0">{
+        uri := getEnv("MONGO_URI", "mongodb://localhost:27017")
+        dbName := getEnv("MONGO_DB", "banking")
+
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        defer cancel()
+
+        client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatal("Failed to connect to MongoDB:", err)
+        }</span>
+        <span class="cov0" title="0">if err := client.Ping(ctx, nil); err != nil </span><span class="cov0" title="0">{
+                log.Fatal("MongoDB ping failed:", err)
+        }</span>
+
+        <span class="cov0" title="0">col := client.Database(dbName).Collection("transfers")
+        Repo = &amp;MongoTransferRepo{Col: col}
+        log.Printf("Connected to MongoDB at %s (db=%s)", uri, dbName)</span>
+}
+
+func getEnv(key, fallback string) string <span class="cov0" title="0">{
+        if value := os.Getenv(key); value != "" </span><span class="cov0" title="0">{
+                return value
+        }</span>
+        <span class="cov0" title="0">return fallback</span>
+}</pre>
+		
+		<pre class="file" id="file2" style="display: none">package handlers
+
+import (
+        "context"
+        "errors"
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "banking/gin-service/client"
+        "banking/gin-service/db"
+        "banking/gin-service/models"
+        temporalsetup "banking/gin-service/temporal"
+
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        temporalclient "go.temporal.io/sdk/client"
+)
+
+var TemporalClient temporalclient.Client
+
+type TransferRequest struct {
+        FromAccount  string  `json:"from_account" binding:"required"`
+        ToAccount    string  `json:"to_account" binding:"required"`
+        Amount       float64 `json:"amount" binding:"required,gt=0"`
+        TransferMode string  `json:"transfer_mode" binding:"required,oneof=NEFT RTGS IMPS"`
+        Tpin         string  `json:"tpin" binding:"required"`
+}
+
+func ProcessTransfer(c *gin.Context) <span class="cov8" title="1">{
+        ProcessTransferWithClient(c, client.NewCoreBankingClient())
+}</span>
+
+func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClient) <span class="cov8" title="1">{
+        var req TransferRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+        }</span>
+
+        <span class="cov8" title="1">fromID, err := uuid.Parse(req.FromAccount)
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from_account UUID"})
+                return
+        }</span>
+        <span class="cov8" title="1">toID, err := uuid.Parse(req.ToAccount)
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "invalid to_account UUID"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">transfer := models.Transfer{
+                FromAccount:  fromID,
+                ToAccount:    toID,
+                Amount:       req.Amount,
+                TransferMode: req.TransferMode,
+                Status:       getInitialStatus(req.TransferMode),
+        }
+
+        ctx := c.Request.Context()
+        if err := db.Repo.Create(ctx, &amp;transfer); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.TransferMode == "IMPS" </span><span class="cov8" title="1">{
+                result, err := bankingClient.SettleTransfer(
+                        transfer.FromAccount.String(),
+                        transfer.ToAccount.String(),
+                        transfer.Amount,
+                        transfer.TransferMode,
+                        req.Tpin,
+                )
+                if err != nil </span><span class="cov8" title="1">{
+                        log.Printf("Failed to settle IMPS transfer: %v", err)
+                        db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
+                        transfer.Status = "FAILED"
+                }</span> else<span class="cov8" title="1"> {
+                        db.Repo.UpdateStatus(context.Background(), transfer.ID, result.Status)
+                        transfer.Status = result.Status
+                }</span>
+                <span class="cov8" title="1">c.JSON(http.StatusAccepted, gin.H{
+                        "message":  fmt.Sprintf("%s transfer completed", req.TransferMode),
+                        "transfer": transfer,
+                })</span>
+        } else<span class="cov8" title="1"> {
+                if TemporalClient != nil </span><span class="cov8" title="1">{
+                        temporalsetup.StartSettlementWorkflow(
+                                TemporalClient,
+                                transfer.ID.String(),
+                                transfer.FromAccount.String(),
+                                transfer.ToAccount.String(),
+                                transfer.Amount,
+                                transfer.TransferMode,
+                                req.Tpin,
+                        )
+                }</span> else<span class="cov8" title="1"> {
+                        log.Printf("Warning: Temporal not connected — using goroutine fallback for %s transfer %s",
+                                req.TransferMode, transfer.ID)
+                        go simulateSettlement(transfer, bankingClient, req.Tpin)
+                }</span>
+                <span class="cov8" title="1">c.JSON(http.StatusAccepted, gin.H{
+                        "message":  fmt.Sprintf("%s transfer initiated", req.TransferMode),
+                        "transfer": transfer,
+                })</span>
+        }
+}
+
+func GetTransferStatus(c *gin.Context) <span class="cov8" title="1">{
+        id, err := uuid.Parse(c.Param("id"))
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "invalid transfer ID"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">transfer, err := db.Repo.FindByID(c.Request.Context(), id)
+        if errors.Is(err, db.ErrNotFound) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusNotFound, gin.H{"error": "transfer not found"})
+                return
+        }</span>
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, transfer)</span>
+}
+
+func GetAllTransfers(c *gin.Context) <span class="cov8" title="1">{
+        transfers, err := db.Repo.FindAll(c.Request.Context())
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch transfers"})
+                return
+        }</span>
+        <span class="cov8" title="1">c.JSON(http.StatusOK, transfers)</span>
+}
+
+func getInitialStatus(mode string) string <span class="cov8" title="1">{
+        switch mode </span>{
+        case "IMPS":<span class="cov8" title="1">
+                return "SUCCESS"</span>
+        case "NEFT":<span class="cov8" title="1">
+                return "PENDING"</span>
+        case "RTGS":<span class="cov8" title="1">
+                return "PROCESSING"</span>
+        default:<span class="cov8" title="1">
+                return "PENDING"</span>
+        }
+}
+
+func simulateSettlement(transfer models.Transfer, bankingClient client.BankingClient, tpin string) <span class="cov8" title="1">{
+        switch transfer.TransferMode </span>{
+        case "NEFT":<span class="cov8" title="1">
+                time.Sleep(30 * time.Second)</span>
+        case "RTGS":<span class="cov8" title="1">
+                time.Sleep(15 * time.Second)</span>
+        }
+
+        <span class="cov8" title="1">result, err := bankingClient.SettleTransfer(
+                transfer.FromAccount.String(),
+                transfer.ToAccount.String(),
+                transfer.Amount,
+                transfer.TransferMode,
+                tpin,
+        )
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Failed to notify Spring Boot: %v", err)
+                db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
+                log.Printf("%s transfer %s marked as FAILED", transfer.TransferMode, transfer.ID)
+                return
+        }</span>
+        <span class="cov8" title="1">if result == nil </span><span class="cov8" title="1">{
+    log.Printf("Unexpected nil result for %s transfer %s", transfer.TransferMode, transfer.ID)
+    db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
+    return
+        }</span>
+        <span class="cov8" title="1">db.Repo.UpdateStatus(context.Background(), transfer.ID, result.Status)
+        log.Printf("%s transfer %s settled with status: %s", transfer.TransferMode, transfer.ID, result.Status)</span>
+}</pre>
+		
+		<pre class="file" id="file3" style="display: none">package main
+
+import (
+        "log"
+        "os"
+
+        "banking/gin-service/db"
+        "banking/gin-service/handlers"
+        temporalsetup "banking/gin-service/temporal"
+
+        "github.com/gin-gonic/gin"
+        "github.com/joho/godotenv"
+        temporalclient "go.temporal.io/sdk/client"
+)
+
+func main() <span class="cov0" title="0">{
+        if err := godotenv.Load(); err != nil </span><span class="cov0" title="0">{
+                log.Println("No .env file found, using environment variables")
+        }</span>
+
+        <span class="cov0" title="0">db.Connect()
+
+        temporalHost := os.Getenv("TEMPORAL_HOST")
+        if temporalHost == "" </span><span class="cov0" title="0">{
+                temporalHost = "localhost:7233"
+        }</span>
+
+        <span class="cov0" title="0">tc, err := temporalclient.Dial(temporalclient.Options{
+                HostPort: temporalHost,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("Warning: could not connect to Temporal at %s (%v) — falling back to goroutine settlement",
+                        temporalHost, err)
+        }</span> else<span class="cov0" title="0"> {
+                defer tc.Close()
+
+                handlers.TemporalClient = tc
+
+                go temporalsetup.StartWorker(tc)
+                log.Println("Temporal client connected:", temporalHost)
+        }</span>
+
+        <span class="cov0" title="0">r := gin.Default()
+
+        r.GET("/health", func(c *gin.Context) </span><span class="cov0" title="0">{
+                c.JSON(200, gin.H{"status": "gin-service running"})
+        }</span>)
+
+        <span class="cov0" title="0">r.POST("/process-transfer", handlers.ProcessTransfer)
+        r.GET("/transfer/:id", handlers.GetTransferStatus)
+        r.GET("/transfers", handlers.GetAllTransfers)
+
+        log.Println("Gin Transfer Service running on :8081")
+        r.Run(":8081")</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package activities
+
+import (
+        "context"
+        "fmt"
+        "log"
+
+        "banking/gin-service/client"
+        "banking/gin-service/db"
+
+        "github.com/google/uuid"
+)
+
+type SettlementActivity struct {
+        BankingClient client.BankingClient
+}
+type SettlementInput struct {
+        TransferID   string
+        FromAccount  string
+        ToAccount    string
+        Amount       float64
+        TransferMode string
+        Tpin         string
+}
+
+func (a *SettlementActivity) SettleTransfer(ctx context.Context, input SettlementInput) error <span class="cov8" title="1">{
+        result, err := a.BankingClient.SettleTransfer(
+                input.FromAccount,
+                input.ToAccount,
+                input.Amount,
+                input.TransferMode,
+                input.Tpin,
+        )
+        status := "FAILED"
+        if err == nil &amp;&amp; result != nil </span><span class="cov8" title="1">{
+                status = result.Status
+        }</span>
+
+        <span class="cov8" title="1">transferID, parseErr := uuid.Parse(input.TransferID)
+        if parseErr != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid transfer ID %q: %w", input.TransferID, parseErr)
+        }</span>
+
+        <span class="cov8" title="1">if dbErr := db.Repo.UpdateStatus(ctx, transferID, status); dbErr != nil </span><span class="cov0" title="0">{
+                log.Printf("Temporal activity: failed to update transfer %s in DB: %v", input.TransferID, dbErr)
+        }</span>
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("spring boot settlement failed for transfer %s: %w", input.TransferID, err)
+        }</span>
+
+        <span class="cov8" title="1">log.Printf("Temporal activity: %s transfer %s settled with status: %s",
+                input.TransferMode, input.TransferID, status)
+        return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package temporalsetup
+
+import (
+        "context"
+        "log"
+
+        "banking/gin-service/client"
+        "banking/gin-service/temporal/activities"
+        "banking/gin-service/temporal/workflows"
+
+        temporalclient "go.temporal.io/sdk/client"
+        "go.temporal.io/sdk/worker"
+)
+
+const TaskQueue = "settlement-task-queue"
+
+var newWorker = func(tc temporalclient.Client, taskQueue string, options worker.Options) worker.Worker <span class="cov0" title="0">{
+        return worker.New(tc, taskQueue, options)
+}</span>
+
+func StartWorker(tc temporalclient.Client) <span class="cov8" title="1">{
+        act := &amp;activities.SettlementActivity{
+                BankingClient: client.NewCoreBankingClient(),
+        }
+
+        w := newWorker(tc, TaskQueue, worker.Options{}) 
+        w.RegisterWorkflow(workflows.SettlementWorkflow)
+        w.RegisterActivity(act) 
+        if err := w.Start(); err != nil </span><span class="cov0" title="0">{
+                log.Fatal("Temporal: failed to start worker:", err)
+        }</span>
+        <span class="cov8" title="1">log.Println("Temporal: worker started, listening on queue:", TaskQueue)</span>
+}
+
+func StartSettlementWorkflow(
+        tc temporalclient.Client,
+        transferID, fromAccount, toAccount string,
+        amount float64,
+        transferMode, tpin string,
+) <span class="cov8" title="1">{
+        _, err := tc.ExecuteWorkflow(
+                context.Background(),
+                temporalclient.StartWorkflowOptions{
+                        ID:        "settlement-" + transferID, 
+                        
+                        TaskQueue: TaskQueue,
+                },
+                workflows.SettlementWorkflow,
+                workflows.SettlementWorkflowInput{
+                        TransferID:   transferID,
+                        FromAccount:  fromAccount,
+                        ToAccount:    toAccount,
+                        Amount:       amount,
+                        TransferMode: transferMode,
+                        Tpin:         tpin,
+                },
+        )
+        if err != nil </span><span class="cov8" title="1">{
+                log.Printf("Temporal: failed to start %s settlement workflow for transfer %s: %v",
+                        transferMode, transferID, err)
+                return
+        }</span>
+        <span class="cov8" title="1">log.Printf("Temporal: started %s settlement workflow for transfer %s", transferMode, transferID)</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package workflows
+
+import (
+        "fmt"
+        "time"
+
+        "banking/gin-service/temporal/activities"
+
+        "go.temporal.io/sdk/temporal"
+        "go.temporal.io/sdk/workflow"
+)
+
+type SettlementWorkflowInput struct {
+        TransferID   string
+        FromAccount  string
+        ToAccount    string
+        Amount       float64
+        TransferMode string
+        Tpin         string
+}
+
+func SettlementWorkflow(ctx workflow.Context, input SettlementWorkflowInput) error <span class="cov8" title="1">{
+
+        var delay time.Duration
+        switch input.TransferMode </span>{
+        case "NEFT":<span class="cov8" title="1">
+                delay = 30 * time.Second</span> 
+        case "RTGS":<span class="cov8" title="1">
+                delay = 15 * time.Second</span> 
+        default:<span class="cov8" title="1">
+                return fmt.Errorf("unsupported transfer mode for settlement of Transfer: %s", input.TransferMode)</span>
+        }
+
+        <span class="cov8" title="1">if err := workflow.Sleep(ctx, delay); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">ao := workflow.ActivityOptions{
+                StartToCloseTimeout: 40 * time.Second,
+                RetryPolicy: &amp;temporal.RetryPolicy{
+                        MaximumAttempts: 0,
+                        InitialInterval: 5 * time.Second,
+                        BackoffCoefficient: 2.0,
+                },
+        }
+        ctx = workflow.WithActivityOptions(ctx, ao)
+
+
+        var act *activities.SettlementActivity
+        return workflow.ExecuteActivity(ctx, act.SettleTransfer, activities.SettlementInput{
+                TransferID:   input.TransferID,
+                FromAccount:  input.FromAccount,
+                ToAccount:    input.ToAccount,
+                Amount:       input.Amount,
+                TransferMode: input.TransferMode,
+                Tpin:         input.Tpin,
+        }).Get(ctx, nil)</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

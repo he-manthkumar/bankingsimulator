@@ -7,14 +7,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	temporalclient "go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/worker"
 )
-
 
 type mockTemporalClient struct {
 	temporalclient.Client
-	executeCalled    bool
-	lastWorkflowID   string
-	returnErr        error
+	executeCalled  bool
+	lastWorkflowID string
+	returnErr      error
 }
 
 func (m *mockTemporalClient) ExecuteWorkflow(
@@ -30,6 +30,38 @@ func (m *mockTemporalClient) ExecuteWorkflow(
 
 func (m *mockTemporalClient) Close() {}
 
+type mockWorker struct {
+    worker.Worker                  
+    startCalled            bool
+    registerWorkflowCalled bool
+    registerActivityCalled bool
+}
+
+func (m *mockWorker) RegisterWorkflow(_ interface{}) {
+	m.registerWorkflowCalled = true 
+	}
+func (m *mockWorker) RegisterActivity(_ interface{}) { 
+	m.registerActivityCalled = true 
+	}
+func (m *mockWorker) Start() error{ 
+	m.startCalled = true; return nil 
+	}
+
+func TestStartWorker_shouldRegisterWorkflowAndActivityAndStart(t *testing.T) {
+    mock := &mockWorker{}
+
+    original := newWorker
+    newWorker = func(_ temporalclient.Client, _ string, _ worker.Options) worker.Worker {
+        return mock
+    }
+    defer func() { newWorker = original }()
+
+    StartWorker(nil)
+
+    assert.True(t, mock.registerWorkflowCalled, "should register workflow")
+    assert.True(t, mock.registerActivityCalled, "should register activity")
+    assert.True(t, mock.startCalled, "should call Start()")
+}
 
 func TestStartSettlementWorkflow_shouldCallExecuteWorkflowWithCorrectID(t *testing.T) {
 	transferID := uuid.New().String()
@@ -101,5 +133,3 @@ func TestStartSettlementWorkflow_shouldUseTaskQueueConstant(t *testing.T) {
 	assert.Equal(t, TaskQueue, capturedQueue,
 		"workflow must use the TaskQueue constant so worker and starter stay in sync")
 }
-
-

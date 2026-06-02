@@ -19,7 +19,6 @@ class CoreBankingClient:
             raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
         if response.status_code != 200:
             raise HTTPException(status_code=502, detail="Core banking service error")
-
         return response.json()
 
     @staticmethod

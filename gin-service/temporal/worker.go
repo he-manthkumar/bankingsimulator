@@ -14,12 +14,16 @@ import (
 
 const TaskQueue = "settlement-task-queue"
 
+var newWorker = func(tc temporalclient.Client, taskQueue string, options worker.Options) worker.Worker {
+	return worker.New(tc, taskQueue, options)
+}
+
 func StartWorker(tc temporalclient.Client) {
 	act := &activities.SettlementActivity{
 		BankingClient: client.NewCoreBankingClient(),
 	}
 
-	w := worker.New(tc, TaskQueue, worker.Options{})
+	w := newWorker(tc, TaskQueue, worker.Options{}) 
 	w.RegisterWorkflow(workflows.SettlementWorkflow)
 	w.RegisterActivity(act) 
 	if err := w.Start(); err != nil {

@@ -1,26 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.banking.service.TransactionServiceTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-05-26T09:42:47.403Z" hostname="HEMANTHKUMAR" time="0.15">
+<testsuite name="com.banking.service.TransactionServiceTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-06-01T05:33:38.431Z" hostname="HEMANTHKUMAR" time="0.129">
   <properties/>
-  <testcase name="test_saveTransaction_shouldCallRepositorySaveOnce()" classname="com.banking.service.TransactionServiceTest" time="0.075"/>
-  <testcase name="test_settleTransfer_shouldCreditReceiverBalanceWhenTransferIsSuccessful()" classname="com.banking.service.TransactionServiceTest" time="0.004"/>
-  <testcase name="test_settleTransfer_shouldThrowExceptionWhenSenderAccountNotFound()" classname="com.banking.service.TransactionServiceTest" time="0.008"/>
+  <testcase name="test_saveTransaction_shouldCallRepositorySaveOnce()" classname="com.banking.service.TransactionServiceTest" time="0.066"/>
+  <testcase name="test_settleTransfer_shouldCreditReceiverBalanceWhenTransferIsSuccessful()" classname="com.banking.service.TransactionServiceTest" time="0.003"/>
+  <testcase name="test_settleTransfer_shouldThrowExceptionWhenSenderAccountNotFound()" classname="com.banking.service.TransactionServiceTest" time="0.006"/>
   <testcase name="test_getAccountTransactions_shouldReturnEmptyListWhenNoTransactionsExist()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
-  <testcase name="test_getAllTransactions_shouldReturnEmptyListWhenNoTransactionsExist()" classname="com.banking.service.TransactionServiceTest" time="0.001"/>
+  <testcase name="test_getAllTransactions_shouldReturnEmptyListWhenNoTransactionsExist()" classname="com.banking.service.TransactionServiceTest" time="0.003"/>
   <testcase name="test_settleTransfer_shouldReturnSuccessTransactionWhenValidDetailsProvided()" classname="com.banking.service.TransactionServiceTest" time="0.005"/>
-  <testcase name="test_settleTransfer_shouldReturnFailedTransactionWhenInsufficientBalance()" classname="com.banking.service.TransactionServiceTest" time="0.005"/>
+  <testcase name="test_settleTransfer_shouldReturnFailedTransactionWhenInsufficientBalance()" classname="com.banking.service.TransactionServiceTest" time="0.003"/>
   <testcase name="test_getAccountTransactions_shouldReturnMixedTransactionsWhenBothSentAndReceived()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
-  <testcase name="test_getAccountTransactions_shouldReturnAllSenderTransactionsRegardlessOfStatus()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
-  <testcase name="test_settleTransfer_shouldReturnSuccessWhenAmountEqualsExactBalance()" classname="com.banking.service.TransactionServiceTest" time="0.004"/>
+  <testcase name="test_getAccountTransactions_shouldReturnAllSenderTransactionsRegardlessOfStatus()" classname="com.banking.service.TransactionServiceTest" time="0.001"/>
+  <testcase name="test_settleTransfer_shouldReturnSuccessWhenAmountEqualsExactBalance()" classname="com.banking.service.TransactionServiceTest" time="0.003"/>
   <testcase name="test_getTransaction_shouldReturnEmptyWhenTransactionNotFound()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
-  <testcase name="test_saveTransaction_shouldPersistCorrectFieldsWhenCalled()" classname="com.banking.service.TransactionServiceTest" time="0.004"/>
-  <testcase name="test_settleTransfer_shouldReturnFailedTransactionWhenTpinIsIncorrect()" classname="com.banking.service.TransactionServiceTest" time="0.003"/>
-  <testcase name="test_getTransaction_shouldReturnTransactionWhenValidIdProvided()" classname="com.banking.service.TransactionServiceTest" time="0.001"/>
-  <testcase name="test_settleTransfer_shouldReturnFailedTransactionWhenTpinIsEmpty()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
-  <testcase name="test_saveTransaction_shouldReturnSavedTransactionWhenValidDetailsProvided()" classname="com.banking.service.TransactionServiceTest" time="0.004"/>
-  <testcase name="test_getAccountTransactions_shouldExcludeFailedIncomingTransactions()" classname="com.banking.service.TransactionServiceTest" time="0.003"/>
+  <testcase name="test_saveTransaction_shouldPersistCorrectFieldsWhenCalled()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
+  <testcase name="test_settleTransfer_shouldReturnFailedTransactionWhenTpinIsIncorrect()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
+  <testcase name="test_getTransaction_shouldReturnTransactionWhenValidIdProvided()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
+  <testcase name="test_settleTransfer_shouldReturnFailedTransactionWhenTpinIsEmpty()" classname="com.banking.service.TransactionServiceTest" time="0.003"/>
+  <testcase name="test_saveTransaction_shouldReturnSavedTransactionWhenValidDetailsProvided()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
+  <testcase name="test_getAccountTransactions_shouldExcludeFailedIncomingTransactions()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
   <testcase name="test_settleTransfer_shouldThrowExceptionWhenReceiverAccountNotFound()" classname="com.banking.service.TransactionServiceTest" time="0.003"/>
-  <testcase name="test_settleTransfer_shouldDeductSenderBalanceWhenTransferIsSuccessful()" classname="com.banking.service.TransactionServiceTest" time="0.003"/>
-  <testcase name="test_getAccountTransactions_shouldReturnSuccessTransactionsWhenAccountIsReceiver()" classname="com.banking.service.TransactionServiceTest" time="0.004"/>
+  <testcase name="test_settleTransfer_shouldDeductSenderBalanceWhenTransferIsSuccessful()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
+  <testcase name="test_getAccountTransactions_shouldReturnSuccessTransactionsWhenAccountIsReceiver()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
   <testcase name="test_getAllTransactions_shouldReturnListWhenTransactionsExist()" classname="com.banking.service.TransactionServiceTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

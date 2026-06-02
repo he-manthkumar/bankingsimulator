@@ -47,7 +47,7 @@ func TestSettlementWorkflow_shouldCompleteSuccessfullyForNEFT(t *testing.T) {
 
 	var act *activities.SettlementActivity
 	env.OnActivity(act.SettleTransfer,
-		mock.Anything,           
+		mock.AnythingOfType("*context.valueCtx"),       
 		expectedActivity(input),  
 	).Return(nil)
 
@@ -64,7 +64,7 @@ func TestSettlementWorkflow_shouldMarkNEFTAsFailedWhenActivityReturnsError(t *te
 
 	var act *activities.SettlementActivity
 	env.OnActivity(act.SettleTransfer,
-		mock.Anything,
+		mock.AnythingOfType("*context.valueCtx"),       
 		expectedActivity(input),
 	).Return(errors.New("spring boot down"))
 
@@ -81,7 +81,7 @@ func TestSettlementWorkflow_shouldCompleteSuccessfullyForRTGS(t *testing.T) {
 
 	var act *activities.SettlementActivity
 	env.OnActivity(act.SettleTransfer,
-		mock.Anything,
+		mock.AnythingOfType("*context.valueCtx"),
 		expectedActivity(input),
 	).Return(nil)
 
@@ -97,7 +97,7 @@ func TestSettlementWorkflow_shouldMarkRTGSAsFailedWhenActivityReturnsError(t *te
 
 	var act *activities.SettlementActivity
 	env.OnActivity(act.SettleTransfer,
-		mock.Anything,
+		mock.AnythingOfType("*context.valueCtx"),
 		expectedActivity(input),
 	).Return(errors.New("core banking unavailable"))
 

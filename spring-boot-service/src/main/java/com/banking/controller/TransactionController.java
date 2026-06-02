@@ -33,12 +33,14 @@ public class TransactionController {
 
     @PostMapping("/settle")
     public ResponseEntity<Transaction> settleTransfer(@Valid @RequestBody CreateTransactionRequest body) {
+        if (body.getTpin() == null || body.getTpin().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         UUID fromAccount = body.getFromAccount();
         UUID toAccount = body.getToAccount();
         BigDecimal amount = body.getAmount();
         String transferMode = body.getTransferMode();
         String tpin = body.getTpin();
-
         Transaction txn = transactionService.settleTransfer(fromAccount, toAccount, amount, transferMode, tpin);
         return ResponseEntity.ok(txn);
     }

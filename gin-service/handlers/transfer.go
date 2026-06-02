@@ -170,7 +170,11 @@ func simulateSettlement(transfer models.Transfer, bankingClient client.BankingCl
 		log.Printf("%s transfer %s marked as FAILED", transfer.TransferMode, transfer.ID)
 		return
 	}
-
+	if result == nil {
+    log.Printf("Unexpected nil result for %s transfer %s", transfer.TransferMode, transfer.ID)
+    db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
+    return
+	}
 	db.Repo.UpdateStatus(context.Background(), transfer.ID, result.Status)
 	log.Printf("%s transfer %s settled with status: %s", transfer.TransferMode, transfer.ID, result.Status)
 }
