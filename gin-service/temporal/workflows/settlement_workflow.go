@@ -23,12 +23,14 @@ func SettlementWorkflow(ctx workflow.Context, input SettlementWorkflowInput) err
 
 	var delay time.Duration
 	switch input.TransferMode {
+	case "IMPS":
+		delay = 2 * time.Minute  // immediate but with fraud screening
 	case "NEFT":
-		delay = 30 * time.Second 
+		delay = 10 * time.Minute // next batch window
 	case "RTGS":
-		delay = 15 * time.Second 
+		delay = 5 * time.Minute  // real-time gross settlement
 	default:
-		return fmt.Errorf("unsupported transfer mode for settlement of Transfer: %s", input.TransferMode)
+		return fmt.Errorf("unsupported transfer mode: %s", input.TransferMode)
 	}
 
 	if err := workflow.Sleep(ctx, delay); err != nil {
@@ -36,10 +38,10 @@ func SettlementWorkflow(ctx workflow.Context, input SettlementWorkflowInput) err
 	}
 
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 40 * time.Second,
+		StartToCloseTimeout: 15 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 0,
-			InitialInterval: 5 * time.Second,
+			MaximumAttempts:    3,
+			InitialInterval:    10 * time.Second,
 			BackoffCoefficient: 2.0,
 		},
 	}

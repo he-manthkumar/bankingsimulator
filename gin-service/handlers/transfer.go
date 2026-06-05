@@ -64,47 +64,25 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 		return
 	}
 
-	if req.TransferMode == "IMPS" {
-		result, err := bankingClient.SettleTransfer(
+	if TemporalClient != nil {
+		temporalsetup.StartSettlementWorkflow(
+			TemporalClient,
+			transfer.ID.String(),
 			transfer.FromAccount.String(),
 			transfer.ToAccount.String(),
 			transfer.Amount,
 			transfer.TransferMode,
 			req.Tpin,
 		)
-		if err != nil {
-			log.Printf("Failed to settle IMPS transfer: %v", err)
-			db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
-			transfer.Status = "FAILED"
-		} else {
-			db.Repo.UpdateStatus(context.Background(), transfer.ID, result.Status)
-			transfer.Status = result.Status
-		}
-		c.JSON(http.StatusAccepted, gin.H{
-			"message":  fmt.Sprintf("%s transfer completed", req.TransferMode),
-			"transfer": transfer,
-		})
 	} else {
-		if TemporalClient != nil {
-			temporalsetup.StartSettlementWorkflow(
-				TemporalClient,
-				transfer.ID.String(),
-				transfer.FromAccount.String(),
-				transfer.ToAccount.String(),
-				transfer.Amount,
-				transfer.TransferMode,
-				req.Tpin,
-			)
-		} else {
-			log.Printf("Warning: Temporal not connected — using goroutine fallback for %s transfer %s",
-				req.TransferMode, transfer.ID)
-			go simulateSettlement(transfer, bankingClient, req.Tpin)
-		}
-		c.JSON(http.StatusAccepted, gin.H{
-			"message":  fmt.Sprintf("%s transfer initiated", req.TransferMode),
-			"transfer": transfer,
-		})
+		log.Printf("Warning: Temporal not connected — using goroutine fallback for %s transfer %s",
+			req.TransferMode, transfer.ID)
+		go simulateSettlement(transfer, bankingClient, req.Tpin)
 	}
+	c.JSON(http.StatusAccepted, gin.H{
+		"message":  fmt.Sprintf("%s transfer initiated — processing in background", req.TransferMode),
+		"transfer": transfer,
+	})
 }
 
 func GetTransferStatus(c *gin.Context) {
@@ -139,7 +117,7 @@ func GetAllTransfers(c *gin.Context) {
 func getInitialStatus(mode string) string {
 	switch mode {
 	case "IMPS":
-		return "SUCCESS"
+		return "PENDING"
 	case "NEFT":
 		return "PENDING"
 	case "RTGS":
@@ -150,11 +128,15 @@ func getInitialStatus(mode string) string {
 }
 
 func simulateSettlement(transfer models.Transfer, bankingClient client.BankingClient, tpin string) {
+	// Extended delays so Airflow (runs every 5 min) can observe in-flight transfers
+	// before they are settled into PostgreSQL.
 	switch transfer.TransferMode {
-	case "NEFT":
-		time.Sleep(30 * time.Second)
+	case "IMPS":
+		time.Sleep(2 * time.Minute) // 2 min — immediate but with fraud screening
 	case "RTGS":
-		time.Sleep(15 * time.Second)
+		time.Sleep(5 * time.Minute) // 5 min — real-time gross settlement
+	case "NEFT":
+		time.Sleep(10 * time.Minute) // 10 min — simulates next batch window
 	}
 
 	result, err := bankingClient.SettleTransfer(
