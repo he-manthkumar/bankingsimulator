@@ -23,8 +23,6 @@ func SettlementWorkflow(ctx workflow.Context, input SettlementWorkflowInput) err
 
 	var delay time.Duration
 	switch input.TransferMode {
-	case "IMPS":
-		delay = 2 * time.Minute  // immediate but with fraud screening
 	case "NEFT":
 		delay = 10 * time.Minute // next batch window
 	case "RTGS":
