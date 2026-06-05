@@ -130,6 +130,7 @@ services:
       - PG_USER=postgres
       - PG_PASSWORD=password
       - PG_DB=banking
+      - AIRFLOW_URL=http://airflow-webserver:8080
     networks:
       - banking-net
     depends_on:

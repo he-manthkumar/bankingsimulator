@@ -16,6 +16,8 @@ PG_USER     = os.getenv("PG_USER",     "postgres")
 PG_PASSWORD = os.getenv("PG_PASSWORD", "password")
 PG_DB       = os.getenv("PG_DB",       "banking")
 
+AIRFLOW_URL = os.getenv("AIRFLOW_URL", "http://airflow-webserver:8080")
+
 st.set_page_config(
     page_title="Banking Simulator",
     page_icon="💳",
@@ -731,6 +733,21 @@ elif page == "Transfer":
                     "tpin":          tpin
                 }
                 result, code = post(GIN_URL, "/process-transfer", payload)
+
+                # For NEFT/RTGS, immediately trigger the Airflow ETL DAG so
+                # the Pipeline page shows this transfer as IN-FLIGHT right away
+                # instead of waiting for the next scheduled 5-min tick.
+                if mode in ("NEFT", "RTGS"):
+                    try:
+                        import uuid as _uuid
+                        requests.post(
+                            f"{AIRFLOW_URL}/api/v1/dags/banking_etl_dag/dagRuns",
+                            json={"dag_run_id": f"transfer_trigger_{_uuid.uuid4().hex[:8]}"},
+                            auth=("admin", "admin"),
+                            timeout=5,
+                        )
+                    except Exception:
+                        pass  # Airflow trigger is best-effort; don't break the transfer UI
 
                 if code == 202:
                     transfer   = result.get("transfer", {})
