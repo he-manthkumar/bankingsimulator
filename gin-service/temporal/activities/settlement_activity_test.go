@@ -21,7 +21,7 @@ type mockBankingClient struct {
 	err    error
 }
 
-func (m *mockBankingClient) SettleTransfer(from, to string, amount float64, mode, tpin string) (*client.SettleTransferResponse, error) {
+func (m *mockBankingClient) SettleTransfer(from, to string, amount float64, mode, tpin, correlationID string) (*client.SettleTransferResponse, error) {
 	return m.result, m.err
 }
 

@@ -25,18 +25,18 @@ public class TransactionService {
     }
 
     @Transactional
-    public Transaction settleTransfer(UUID fromId, UUID toId, BigDecimal amount, String transferMode, String tpin) {
+    public Transaction settleTransfer(UUID fromId, UUID toId, BigDecimal amount, String transferMode, String tpin, String correlationId) {
         Account sender = accountRepository.findById(fromId)
                 .orElseThrow(() -> new RuntimeException("Sender account not found"));
         Account receiver = accountRepository.findById(toId)
                 .orElseThrow(() -> new RuntimeException("Receiver account not found"));
 
         if (!sender.getTpin().equals(tpin)) {
-            return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, "FAILED"));
+            return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, "FAILED", correlationId));
         }
 
         if (sender.getBalance().compareTo(amount) < 0) {
-            return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, "FAILED"));
+            return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, "FAILED", correlationId));
         }
 
         sender.setBalance(sender.getBalance().subtract(amount));
@@ -44,12 +44,13 @@ public class TransactionService {
         accountRepository.save(sender);
         accountRepository.save(receiver);
 
-        return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, "SUCCESS"));
+        return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, "SUCCESS", correlationId));
     }
 
     private Transaction buildTransaction(UUID fromId, UUID toId, BigDecimal amount, String transferMode,
-            String status) {
+            String status, String correlationId) {
         return Transaction.builder()
+                .correlationId(correlationId != null ? UUID.fromString(correlationId) : null)
                 .fromAccount(fromId)
                 .toAccount(toId)
                 .amount(amount)

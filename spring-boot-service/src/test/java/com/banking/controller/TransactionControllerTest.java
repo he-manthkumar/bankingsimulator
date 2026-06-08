@@ -19,6 +19,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -150,6 +152,7 @@ public class TransactionControllerTest {
                 body.put("transferMode", "NEFT");
                 body.put("status", "PENDING");
                 body.put("tpin", "1234");
+                body.put("correlationId", UUID.randomUUID().toString());
 
                 Transaction settledTxn = new Transaction();
                 settledTxn.setId(UUID.randomUUID());
@@ -157,15 +160,15 @@ public class TransactionControllerTest {
                 settledTxn.setAmount(new BigDecimal("1500.00"));
                 settledTxn.setTransferMode("NEFT");
 
-                when(transactionService.settleTransfer(fromAccountId, toAccountId, new BigDecimal("1500.00"), "NEFT",
-                                "1234"))
+                when(transactionService.settleTransfer(eq(fromAccountId), eq(toAccountId), eq(new BigDecimal("1500.00")), eq("NEFT"),
+                                eq("1234"), any(String.class)))
                                 .thenReturn(settledTxn);
 
                 mockMvc.perform(post("/transactions/settle").contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(body)))
                                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SUCCESS"));
-                verify(transactionService).settleTransfer(fromAccountId, toAccountId, new BigDecimal("1500.00"), "NEFT",
-                                "1234");
+                verify(transactionService).settleTransfer(eq(fromAccountId), eq(toAccountId), eq(new BigDecimal("1500.00")), eq("NEFT"),
+                                eq("1234"), any(String.class));
         }
 
         @Test
@@ -176,21 +179,22 @@ public class TransactionControllerTest {
                 body.put("amount", "800.00");
                 body.put("transferMode", "RTGS");
                 body.put("tpin", "5678");
+                body.put("correlationId", UUID.randomUUID().toString());
 
                 Transaction settledTxn = new Transaction();
                 settledTxn.setId(UUID.randomUUID());
                 settledTxn.setStatus("SUCCESS");
                 settledTxn.setAmount(new BigDecimal("800.00"));
 
-                when(transactionService.settleTransfer(fromAccountId, toAccountId, new BigDecimal("800.00"), "RTGS",
-                                "5678"))
+                when(transactionService.settleTransfer(eq(fromAccountId), eq(toAccountId), eq(new BigDecimal("800.00")), eq("RTGS"),
+                                eq("5678"), any(String.class)))
                                 .thenReturn(settledTxn);
 
                 mockMvc.perform(post("/transactions/settle").contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(body)))
                                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SUCCESS"));
-                verify(transactionService).settleTransfer(fromAccountId, toAccountId, new BigDecimal("800.00"), "RTGS",
-                                "5678");
+                verify(transactionService).settleTransfer(eq(fromAccountId), eq(toAccountId), eq(new BigDecimal("800.00")), eq("RTGS"),
+                                eq("5678"), any(String.class));
         }
 
         @Test

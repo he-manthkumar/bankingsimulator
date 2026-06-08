@@ -28,11 +28,12 @@ func NewCoreBankingClient() *CoreBankingClient {
 }
 
 type SettleTransferRequest struct {
-	FromAccount  string  `json:"fromAccount"`
-	ToAccount    string  `json:"toAccount"`
-	Amount       float64 `json:"amount"`
-	TransferMode string  `json:"transferMode"`
-	Tpin         string  `json:"tpin"`
+	FromAccount   string  `json:"fromAccount"`
+	ToAccount     string  `json:"toAccount"`
+	Amount        float64 `json:"amount"`
+	TransferMode  string  `json:"transferMode"`
+	Tpin          string  `json:"tpin"`
+	CorrelationID string  `json:"correlationId"`
 }
 
 type SettleTransferResponse struct {
@@ -44,13 +45,14 @@ type SettleTransferResponse struct {
 	Status       string  `json:"status"`
 }
 
-func (c *CoreBankingClient) SettleTransfer(fromAccount, toAccount string, amount float64, transferMode string, tpin string) (*SettleTransferResponse, error) {
+func (c *CoreBankingClient) SettleTransfer(fromAccount, toAccount string, amount float64, transferMode string, tpin string, correlationID string) (*SettleTransferResponse, error) {
 	payload := SettleTransferRequest{
-		FromAccount:  fromAccount,
-		ToAccount:    toAccount,
-		Amount:       amount,
-		TransferMode: transferMode,
-		Tpin:         tpin,
+		FromAccount:   fromAccount,
+		ToAccount:     toAccount,
+		Amount:        amount,
+		TransferMode:  transferMode,
+		Tpin:          tpin,
+		CorrelationID: correlationID,
 	}
 
 	body, err := json.Marshal(payload)

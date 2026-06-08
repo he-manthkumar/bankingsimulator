@@ -36,7 +36,7 @@ func StartSettlementWorkflow(
 	tc temporalclient.Client,
 	transferID, fromAccount, toAccount string,
 	amount float64,
-	transferMode, tpin string,
+	transferMode, tpin, correlationID string,
 ) {
 	_, err := tc.ExecuteWorkflow(
 		context.Background(),
@@ -47,12 +47,13 @@ func StartSettlementWorkflow(
 		},
 		workflows.SettlementWorkflow,
 		workflows.SettlementWorkflowInput{
-			TransferID:   transferID,
-			FromAccount:  fromAccount,
-			ToAccount:    toAccount,
-			Amount:       amount,
-			TransferMode: transferMode,
-			Tpin:         tpin,
+			TransferID:    transferID,
+			FromAccount:   fromAccount,
+			ToAccount:     toAccount,
+			Amount:        amount,
+			TransferMode:  transferMode,
+			Tpin:          tpin,
+			CorrelationID: correlationID,
 		},
 	)
 	if err != nil {

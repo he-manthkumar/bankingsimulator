@@ -67,7 +67,7 @@ func Test_SettleTransfer_shouldReturnSuccessResponseWhenSettlementIsSuccessful(t
 	result, err := newTestClient(server).SettleTransfer(
 		"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
 		"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-		200.00, "UPI", "1234",
+		200.00, "UPI", "1234", "test-correlation-id",
 	)
 
 	assert.NoError(t, err)
@@ -87,7 +87,7 @@ func Test_SettleTransfer_shouldReturnFailedStatusWhenTpinDoesNotMatch(t *testing
 	result, err := newTestClient(server).SettleTransfer(
 		"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
 		"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-		100.00, "NEFT", "wrong",
+		100.00, "NEFT", "wrong", "test-correlation-id",
 	)
 
 	assert.NoError(t, err)
@@ -102,7 +102,7 @@ func Test_SettleTransfer_shouldReturnErrorWhenServerReturnsNon200Status(t *testi
 	result, err := newTestClient(server).SettleTransfer(
 		"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
 		"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-		100.00, "IMPS", "1234",
+		100.00, "IMPS", "1234", "test-correlation-id",
 	)
 
 	assert.Error(t, err)
@@ -119,7 +119,7 @@ func Test_SettleTransfer_shouldReturnErrorWhenServerReturnsInvalidJSON(t *testin
 	result, err := newTestClient(server).SettleTransfer(
 		"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
 		"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-		100.00, "IMPS", "1234",
+		100.00, "IMPS", "1234", "test-correlation-id",
 	)
 
 	assert.Error(t, err)
@@ -188,7 +188,7 @@ func Test_SettleTransfer_shouldReturnErrorWhenServerIsUnreachable(t *testing.T) 
 	result, err := newTestClient(server).SettleTransfer(
 		"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
 		"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-		100.00, "NEFT", "1234",
+		100.00, "NEFT", "1234", "test-correlation-id",
 	)
 
 	assert.Error(t, err)

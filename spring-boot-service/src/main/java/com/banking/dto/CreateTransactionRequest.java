@@ -26,4 +26,6 @@ public class CreateTransactionRequest {
     private String status = "PENDING";
     
     private String tpin;
+    
+    private String correlationId;
 }

@@ -20,6 +20,7 @@ import java.util.UUID;
 public class Transaction 
 {
     @Id @GeneratedValue(strategy = GenerationType.UUID)private UUID id;
+    @Column(name = "correlation_id", unique = true) private UUID correlationId;
     @Column(name = "from_account", nullable = false) private UUID fromAccount;
     @Column(name = "to_account", nullable = false)private UUID toAccount;
     @Column(nullable = false, precision = 15, scale = 2)private BigDecimal amount;

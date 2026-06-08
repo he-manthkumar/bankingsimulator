@@ -14,12 +14,13 @@ import (
 
 func newInput(mode string) SettlementWorkflowInput {
 	return SettlementWorkflowInput{
-		TransferID:   uuid.New().String(),
-		FromAccount:  uuid.New().String(),
-		ToAccount:    uuid.New().String(),
-		Amount:       1000.0,
-		TransferMode: mode,
-		Tpin:         "1234",
+		TransferID:    uuid.New().String(),
+		FromAccount:   uuid.New().String(),
+		ToAccount:     uuid.New().String(),
+		Amount:        1000.0,
+		TransferMode:  mode,
+		Tpin:          "1234",
+		CorrelationID: uuid.New().String(),
 	}
 }
 
@@ -32,12 +33,13 @@ func newEnv(t *testing.T) *testsuite.TestWorkflowEnvironment {
 
 func expectedActivity(input SettlementWorkflowInput) activities.SettlementInput {
 	return activities.SettlementInput{
-		TransferID:   input.TransferID,
-		FromAccount:  input.FromAccount,
-		ToAccount:    input.ToAccount,
-		Amount:       input.Amount,
-		TransferMode: input.TransferMode,
-		Tpin:         input.Tpin,
+		TransferID:    input.TransferID,
+		FromAccount:   input.FromAccount,
+		ToAccount:     input.ToAccount,
+		Amount:        input.Amount,
+		TransferMode:  input.TransferMode,
+		Tpin:          input.Tpin,
+		CorrelationID: input.CorrelationID,
 	}
 }
 

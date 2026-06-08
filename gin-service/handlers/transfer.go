@@ -51,11 +51,12 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 	}
 
 	transfer := models.Transfer{
-		FromAccount:  fromID,
-		ToAccount:    toID,
-		Amount:       req.Amount,
-		TransferMode: req.TransferMode,
-		Status:       getInitialStatus(req.TransferMode),
+		CorrelationID: uuid.New().String(),
+		FromAccount:   fromID,
+		ToAccount:     toID,
+		Amount:        req.Amount,
+		TransferMode:  req.TransferMode,
+		Status:        getInitialStatus(req.TransferMode),
 	}
 
 	ctx := c.Request.Context()
@@ -72,6 +73,7 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 			transfer.Amount,
 			transfer.TransferMode,
 			req.Tpin,
+			transfer.CorrelationID,
 		)
 		if err != nil {
 			log.Printf("Failed to settle IMPS transfer: %v", err)
@@ -96,11 +98,12 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 				transfer.Amount,
 				transfer.TransferMode,
 				req.Tpin,
+				transfer.CorrelationID,
 			)
 		} else {
 			log.Printf("Warning: Temporal not connected — using goroutine fallback for %s transfer %s",
 				req.TransferMode, transfer.ID)
-			go simulateSettlement(transfer, bankingClient, req.Tpin)
+			go simulateSettlement(transfer, bankingClient, req.Tpin, transfer.CorrelationID)
 		}
 		c.JSON(http.StatusAccepted, gin.H{
 			"message":  fmt.Sprintf("%s transfer initiated — processing in background", req.TransferMode),
@@ -151,7 +154,7 @@ func getInitialStatus(mode string) string {
 	}
 }
 
-func simulateSettlement(transfer models.Transfer, bankingClient client.BankingClient, tpin string) {
+func simulateSettlement(transfer models.Transfer, bankingClient client.BankingClient, tpin string, correlationID string) {
 	// Extended delays so Airflow (runs every 5 min) can observe in-flight transfers
 	// before they are settled into PostgreSQL.
 	switch transfer.TransferMode {
@@ -167,6 +170,7 @@ func simulateSettlement(transfer models.Transfer, bankingClient client.BankingCl
 		transfer.Amount,
 		transfer.TransferMode,
 		tpin,
+		correlationID,
 	)
 	if err != nil {
 		log.Printf("Failed to notify Spring Boot: %v", err)

@@ -1,21 +1,3 @@
-"""
-banking_etl_dag.py
-==================
-Runs every 5 minutes.
-
-Syncs a single table  →  banking.transfer_pipeline
-
-The table joins:
-  • MongoDB  transfers collection  (all initiated transfers, including in-flight)
-  • Postgres transactions table    (only settled transfers)
-
-A row where pg_status IS NULL means the transfer is still IN-FLIGHT —
-it exists in MongoDB but hasn't been settled to Postgres yet.
-
-Task graph:
-    ensure_schema  →  sync_pipeline
-"""
-
 import os
 import logging
 from datetime import datetime, timedelta
@@ -26,7 +8,6 @@ from pymongo import MongoClient
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-# ── Connection config (injected via docker-compose env vars) ────────────────
 PG_HOST     = os.environ.get("POSTGRES_HOST", "postgres")
 PG_USER     = os.environ.get("POSTGRES_USER", "postgres")
 PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "password")
@@ -43,7 +24,6 @@ def pg_conn():
     )
 
 
-# ── Task 1: create table if it doesn't exist ───────────────────────────────
 def ensure_schema(**_ctx):
     conn = pg_conn()
     cur  = conn.cursor()
@@ -68,41 +48,35 @@ def ensure_schema(**_ctx):
     conn.close()
     logging.info("transfer_pipeline table ready.")
 
-
-# ── Task 2: extract from both sources and upsert ───────────────────────────
 def sync_pipeline(**_ctx):
-    # -- Extract from MongoDB --------------------------------------------------
     client    = MongoClient(MONGO_URI, serverSelectionTimeoutMS=8_000)
     transfers = list(client[MONGO_DB]["transfers"].find({}))
     client.close()
     logging.info("MongoDB: %d transfers", len(transfers))
 
-    # -- Extract from Postgres -------------------------------------------------
     conn = pg_conn()
     cur  = conn.cursor()
     cur.execute("""
-        SELECT id, from_account, to_account, amount, transfer_mode, status, created_at
+        SELECT id, from_account, to_account, amount, transfer_mode, status, created_at, correlation_id
         FROM transactions;
     """)
     pg_rows = cur.fetchall()
     logging.info("Postgres: %d settled transactions", len(pg_rows))
 
-    # Build a lookup keyed by (from_account, to_account, amount, transfer_mode)
-    # to match a MongoDB transfer to its Postgres counterpart.
-    from collections import defaultdict
-    pg_lookup = defaultdict(list)
-    for row in pg_rows:
-        key = (str(row[1]), str(row[2]), float(row[3]), row[4])
-        pg_lookup[key].append({
+    pg_transactions_by_correlation_id = {
+        str(row[7]): {
             "id":     str(row[0]),
             "status": row[5],
             "ts":     row[6],
-        })
+        }
+        for row in pg_rows
+        if row[7] is not None
+    }
 
-    # -- Upsert into transfer_pipeline ----------------------------------------
     upserted = 0
     for t in transfers:
         mongo_id   = str(t.get("_id", ""))
+        correlation_id = str(t.get("correlation_id", ""))
         from_acc   = str(t.get("from_account", ""))
         to_acc     = str(t.get("to_account",   ""))
         amount     = float(t.get("amount",      0))
@@ -110,22 +84,7 @@ def sync_pipeline(**_ctx):
         m_status   = t.get("status", "")
         initiated  = t.get("created_at")
 
-        # Try to find the matching Postgres transaction
-        key     = (from_acc, to_acc, amount, mode)
-        matches = pg_lookup.get(key, [])
-
-        # Pick the match closest in time to the MongoDB created_at
-        matched = None
-        if matches and initiated:
-            matches_sorted = sorted(
-                matches,
-                key=lambda r: abs((r["ts"] - initiated).total_seconds())
-                if r["ts"] else float("inf"),
-            )
-            # Only accept if within 15 minutes (covers the longest NEFT window)
-            candidate = matches_sorted[0]
-            if candidate["ts"] and abs((candidate["ts"] - initiated).total_seconds()) < 900:
-                matched = candidate
+        matched = pg_transactions_by_correlation_id.get(correlation_id)
 
         pg_id      = matched["id"]     if matched else None
         pg_status  = matched["status"] if matched else None
@@ -162,8 +121,6 @@ def sync_pipeline(**_ctx):
     conn.close()
     logging.info("Upserted %d rows into transfer_pipeline.", upserted)
 
-
-# ── DAG definition ──────────────────────────────────────────────────────────
 with DAG(
     dag_id            = "banking_etl_dag",
     description       = "Every 5 min: sync MongoDB transfers + Postgres transactions → transfer_pipeline",

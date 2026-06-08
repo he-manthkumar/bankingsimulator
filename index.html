@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Banking Simulator — Temporal & MongoDB</title>
+  <meta name="description" content="A deep-dive into how Temporal workflows and MongoDB power a distributed banking simulator built during an internship."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet"/>
+  <style>
+    /* ══════════════════════════════════════
+       TOKENS & RESET
+    ══════════════════════════════════════ */
+    :root {
+      --bg: #FAFAFA;
+      --surface: #FFFFFF;
+      --text: #111827;
+      --text-muted: #4B5563;
+      --border: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --accent: #2563EB;
+      --accent-bg: #EFF6FF;
+      --success: #059669;
+      --warning: #D97706;
+      --danger: #DC2626;
+      --code-bg: #111827;
+      --radius: 8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, sans-serif;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ══════════════════════════════════════
+       LAYOUT
+    ══════════════════════════════════════ */
+    .page {
+      max-width: 850px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    nav {
+      padding: 2rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4rem;
+    }
+    .nav-brand {
+      font-family: 'Lora', serif;
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+
+    /* ══════════════════════════════════════
+       TYPOGRAPHY
+    ══════════════════════════════════════ */
+    h1, h2, h3, h4 {
+      font-family: 'Lora', serif;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+    h2 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin-top: 3.5rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+    h4 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      margin-bottom: 1.5rem;
+      font-size: 1.05rem;
+      color: var(--text-muted);
+    }
+    ul, ol {
+      margin-bottom: 1.5rem;
+      padding-left: 1.5rem;
+      color: var(--text-muted);
+    }
+    li { margin-bottom: 0.5rem; font-size: 1.05rem; }
+
+    /* ══════════════════════════════════════
+       HERO
+    ══════════════════════════════════════ */
+    .hero {
+      margin-bottom: 4rem;
+    }
+    .hero-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+      display: block;
+    }
+    .hero-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 2rem;
+    }
+
+    /* ══════════════════════════════════════
+       TAGS & BADGES
+    ══════════════════════════════════════ */
+    .tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.6rem;
+      background: var(--surface);
+      border: 1px solid var(--border-dark);
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+    .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 500;
+      display: inline-block;
+      border: 1px solid transparent;
+    }
+    .badge.success { background: #ECFDF5; color: var(--success); border-color: #A7F3D0; }
+    .badge.warning { background: #FFFBEB; color: var(--warning); border-color: #FDE68A; }
+    .badge.info { background: var(--accent-bg); color: var(--accent); border-color: #BFDBFE; }
+    .badge.danger { background: #FEF2F2; color: var(--danger); border-color: #FECACA; }
+    .badge.neutral { background: var(--surface); color: var(--text-muted); border-color: var(--border-dark); }
+
+    /* ══════════════════════════════════════
+       CARDS & GRIDS
+    ══════════════════════════════════════ */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 768px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+      display: block;
+      font-weight: 600;
+    }
+    .card p { font-size: 0.95rem; margin-bottom: 0; }
+    .card ul { margin-bottom: 0; padding-left: 1rem; }
+    .card li { font-size: 0.95rem; }
+
+    /* ══════════════════════════════════════
+       CODE
+    ══════════════════════════════════════ */
+    .code-wrap {
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .code-header {
+      background: #1F2937;
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid #374151;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: #9CA3AF;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      overflow-x: auto;
+      margin: 0;
+    }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+    pre code { color: #E5E7EB; line-height: 1.5; }
+    p code, li code {
+      background: #F3F4F6;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-size: 0.85em;
+      color: var(--danger);
+      border: 1px solid #E5E7EB;
+    }
+    
+    /* Syntax */
+    .kw { color: #F87171; }
+    .fn { color: #60A5FA; }
+    .str { color: #34D399; }
+    .cm { color: #9CA3AF; font-style: italic; }
+    .num { color: #FBBF24; }
+    .key { color: #A78BFA; }
+
+    /* ══════════════════════════════════════
+       TABLES
+    ══════════════════════════════════════ */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 2rem;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--border);
+    }
+    th, td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: #F9FAFB;
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    td {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    .bad-col { color: var(--danger); font-weight: 500; }
+    .good-col { color: var(--success); font-weight: 500; }
+
+    /* ══════════════════════════════════════
+       MISC
+    ══════════════════════════════════════ */
+    blockquote {
+      border-left: 4px solid var(--accent);
+      background: var(--surface);
+      padding: 1.5rem;
+      margin: 2rem 0;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      font-style: italic;
+      color: var(--text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .arch-diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 2rem;
+      border-radius: var(--radius);
+      margin-bottom: 2rem;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .arch-diagram code {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      display: block;
+      white-space: pre;
+      line-height: 1.6;
+    }
+
+    footer {
+      margin-top: 5rem;
+      padding: 3rem 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-light);
+    }
+    .footer-ports {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="page">
+  <nav>
+    <a href="#" class="nav-brand">Banking Simulator</a>
+    <ul class="nav-links">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#mongodb">MongoDB</a></li>
+      <li><a href="#temporal">Temporal</a></li>
+      <li><a href="#design">Design Decisions</a></li>
+    </ul>
+  </nav>
+
+  <div class="hero">
+    <h1>Distributed Banking with Temporal &amp; MongoDB</h1>
+    <p>
+      How I wired async settlement, durable workflows, and cross-database reconciliation together across five services and three databases.
+    </p>
+    <div class="hero-tags">
+      <span class="tag">Go (Gin)</span>
+      <span class="tag">Spring Boot</span>
+      <span class="tag">FastAPI</span>
+      <span class="tag">MongoDB</span>
+      <span class="tag">PostgreSQL</span>
+      <span class="tag">Temporal</span>
+      <span class="tag">Airflow</span>
+    </div>
+  </div>
+
+  <section id="overview">
+    <h2>Architecture Overview</h2>
+    <p>
+      The system mimics real banking infrastructure with distinct services handling different concerns: five distinct services, three databases, a workflow engine, and an ETL pipeline.
+    </p>
+
+    <div class="grid-3">
+      <div class="card">
+        <span class="card-label">Core Banking</span>
+        <h4>Spring Boot</h4>
+        <ul>
+          <li>Accounts &amp; balances</li>
+          <li>Source of truth for money</li>
+          <li><span class="badge neutral">PostgreSQL :5432</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-label">Transfer Processor</span>
+        <h4>Gin (Go)</h4>
+        <ul>
+          <li>Receives all requests</li>
+          <li>Drives async settlement</li>
+          <li><span class="badge neutral">MongoDB :27017</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-label">Reconciliation</span>
+        <h4>Airflow ETL</h4>
+        <ul>
+          <li>Joins both databases</li>
+          <li>Runs every 5 minutes</li>
+          <li><span class="badge neutral">Airflow :8083</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>How the Services Connect</h3>
+    <p>
+      Two critical design choices shape this flow: Gin touches MongoDB at T+0, and NEFT/RTGS transfers route through a durable Temporal workflow before PostgreSQL ever hears about them.
+    </p>
+    
+    <div class="arch-diagram">
+      <code>
+         Streamlit (:8501)
+              ↓
+    Gin (:8081) — FastAPI (:8082) — Spring Boot (:8080)
+        ↓                              ↓
+ MongoDB (:27017)               PostgreSQL (:5432)
+        ↘                              ↙
+         Airflow ETL (Joins every 5 min)
+      </code>
+    </div>
+  </section>
+
+  <section id="mongodb">
+    <h2>Why MongoDB for Transfers?</h2>
+    <p>
+      Account balances and transfer records have completely different access patterns. Using the same database for both would be a mistake.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Concern</th>
+          <th>Transfers (MongoDB)</th>
+          <th>Balances (PostgreSQL)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Write timing</strong></td>
+          <td>T+0, before settlement begins</td>
+          <td>Only after settlement succeeds</td>
+        </tr>
+        <tr>
+          <td><strong>Schema</strong></td>
+          <td>Flexible, status evolves in-place</td>
+          <td>Fixed, migration required</td>
+        </tr>
+        <tr>
+          <td><strong>Operation</strong></td>
+          <td>Write + status update</td>
+          <td>Atomic debit + credit (ACID)</td>
+        </tr>
+        <tr>
+          <td><strong>Failure Cost</strong></td>
+          <td>Duplicate or missed record</td>
+          <td>Money created or destroyed</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <blockquote>
+      "PostgreSQL is where money lives. MongoDB is where transfers happen."
+    </blockquote>
+
+    <h3>The Transfer Document Lifecycle</h3>
+    <p>A single document is created at T+0 and mutated in-place as the workflow progresses.</p>
+
+    <div class="code-wrap">
+      <div class="code-header">MongoDB Document at T+0</div>
+<pre><code>{
+  <span class="key">"_id"</span>:            <span class="str">"abc-123"</span>,
+  <span class="key">"correlation_id"</span>: <span class="str">"xyz-789"</span>,
+  <span class="key">"from_account"</span>:   <span class="str">"uuid-A"</span>,
+  <span class="key">"to_account"</span>:     <span class="str">"uuid-B"</span>,
+  <span class="key">"amount"</span>:         <span class="num">200000.00</span>,
+  <span class="key">"transfer_mode"</span>:  <span class="str">"NEFT"</span>,
+  <span class="key">"status"</span>:         <span class="str">"PENDING"</span>,  <span class="cm">← written immediately</span>
+  <span class="key">"created_at"</span>:     <span class="str">"2026-06-07T14:25:00Z"</span>
+}</code></pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-header">Go Repository Interface</div>
+<pre><code><span class="kw">type</span> <span class="fn">TransferRepository</span> <span class="kw">interface</span> {
+  <span class="fn">Create</span>(ctx context.Context, t *Transfer) <span class="kw">error</span>
+  <span class="fn">FindByID</span>(ctx context.Context, id uuid.UUID) (*Transfer, <span class="kw">error</span>)
+  <span class="fn">UpdateStatus</span>(ctx context.Context, id uuid.UUID, status <span class="kw">string</span>) <span class="kw">error</span>
+  <span class="fn">FindAll</span>(ctx context.Context) ([]Transfer, <span class="kw">error</span>)
+}</code></pre>
+    </div>
+
+    <h3>The Two-Database Gap</h3>
+    <p>
+      MongoDB and PostgreSQL are intentionally out of sync during NEFT/RTGS settlement. This gap mirrors how real banking systems work.
+    </p>
+    <ul>
+      <li><strong>T+0:</strong> MongoDB: <span class="badge warning">PENDING</span> | PostgreSQL: nothing</li>
+      <li><strong>T+5m:</strong> Airflow runs. Pipeline UI shows <span class="badge warning">IN-FLIGHT</span></li>
+      <li><strong>T+10m:</strong> Temporal settles. MongoDB: <span class="badge success">SUCCESS</span> | PostgreSQL: row written</li>
+      <li><strong>T+15m:</strong> Next Airflow run. Both databases agree. Status <span class="badge success">SETTLED</span></li>
+    </ul>
+  </section>
+
+  <section id="temporal">
+    <h2>The Problem with Goroutines</h2>
+    <p>
+      NEFT settles after 10 minutes, RTGS after 5. The naive approach in Go is to fire a goroutine that sleeps and then calls settlement.
+    </p>
+
+    <div class="code-wrap">
+      <div class="code-header">naive_approach.go</div>
+<pre><code><span class="cm">// the naive approach</span>
+<span class="kw">go func</span>() {
+  time.<span class="fn">Sleep</span>(<span class="num">10</span> * time.Minute)
+  <span class="fn">settle</span>(transfer)  <span class="cm">// what could go wrong?</span>
+}()</code></pre>
+    </div>
+
+    <p>If the Gin process restarts, the goroutine dies and the transfer never settles. If Spring Boot is temporarily down, it fails silently without retries. You have zero visibility.</p>
+
+    <h3>What Temporal Gives Us</h3>
+    <div class="grid-2">
+      <div class="card">
+        <span class="card-label">Workflow</span>
+        <p>The full settlement process (sleep + activity). Persisted to disk, survives crashes.</p>
+      </div>
+      <div class="card">
+        <span class="card-label">Activity</span>
+        <p>The HTTP call to Spring Boot's <code>/transactions/settle</code>. Retried automatically.</p>
+      </div>
+    </div>
+
+    <h3>Temporal Implementation</h3>
+    
+    <div class="code-wrap">
+      <div class="code-header">settlement_workflow.go</div>
+<pre><code><span class="kw">func</span> <span class="fn">SettlementWorkflow</span>(ctx workflow.Context, input SettlementWorkflowInput) <span class="kw">error</span> {
+  <span class="cm">// durable sleep — survives process restarts</span>
+  workflow.<span class="fn">Sleep</span>(ctx, <span class="num">10</span> * time.Minute)
+
+  <span class="cm">// Auto-retries on failure with exponential backoff</span>
+  ao := workflow.ActivityOptions{
+    StartToCloseTimeout: <span class="num">15</span> * time.Minute,
+    RetryPolicy: &amp;temporal.RetryPolicy{
+      MaximumAttempts:    <span class="num">3</span>,
+      InitialInterval:    <span class="num">10</span> * time.Second,
+      BackoffCoefficient: <span class="num">2.0</span>,
+    },
+  }
+  
+  <span class="kw">return</span> workflow.<span class="fn">ExecuteActivity</span>(
+    workflow.<span class="fn">WithActivityOptions</span>(ctx, ao),
+    act.<span class="fn">SettleTransfer</span>, input,
+  ).<span class="fn">Get</span>(ctx, <span class="kw">nil</span>)
+}</code></pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-header">settlement_activity.go</div>
+<pre><code><span class="kw">func</span> (a *<span class="fn">SettlementActivity</span>) <span class="fn">SettleTransfer</span>(ctx context.Context, input SettlementInput) <span class="kw">error</span> {
+  <span class="cm">// 1. call Spring Boot /transactions/settle</span>
+  result, err := a.BankingClient.<span class="fn">SettleTransfer</span>(...)
+  
+  status := <span class="str">"FAILED"</span>
+  <span class="kw">if</span> err == <span class="kw">nil</span> &amp;&amp; result != <span class="kw">nil</span> {
+    status = result.Status
+  }
+
+  <span class="cm">// 2. update MongoDB status (via global db.Repo)</span>
+  db.Repo.<span class="fn">UpdateStatus</span>(ctx, transferID, status)
+
+  <span class="cm">// Temporal auto-retries if err != nil</span>
+  <span class="kw">return</span> err
+}</code></pre>
+    </div>
+
+    <h3>Temporal vs Plain Goroutine — Head to Head</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Plain Goroutine</th>
+          <th>Temporal Workflow</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Gin process crashes mid-sleep</strong></td>
+          <td class="bad-col">Transfer stuck forever</td>
+          <td class="good-col">Resumes from exact point</td>
+        </tr>
+        <tr>
+          <td><strong>Spring Boot temporarily down</strong></td>
+          <td class="bad-col">Fails silently</td>
+          <td class="good-col">Auto-retried 3×</td>
+        </tr>
+        <tr>
+          <td><strong>Visibility ("what's running?")</strong></td>
+          <td class="bad-col">Zero visibility</td>
+          <td class="good-col">Full UI at localhost:8233</td>
+        </tr>
+        <tr>
+          <td><strong>Activity partially succeeded</strong></td>
+          <td class="bad-col">No way to resume</td>
+          <td class="good-col">Skips completed steps</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="design">
+    <h2>Design Decisions</h2>
+    
+    <h3>The correlation_id</h3>
+    <p>
+      MongoDB and PostgreSQL share no natural foreign key. This was the central design problem for Airflow reconciliation. The <code>correlation_id</code> is generated by Gin via <code>uuid.New()</code> at T+0, saved in MongoDB, and passed explicitly to Spring Boot to be saved in PostgreSQL.
+    </p>
+
+    <div class="code-wrap">
+      <div class="code-header">Airflow sync_pipeline task</div>
+<pre><code><span class="cm">-- Exact join across two disconnected DBs</span>
+<span class="kw">SELECT</span>
+  m.transfer_id  <span class="kw">AS</span> mongo_transfer_id,
+  m.status       <span class="kw">AS</span> mongo_status,
+  p.status       <span class="kw">AS</span> pg_status,
+  p.created_at   <span class="kw">AS</span> settled_at
+<span class="kw">FROM</span> mongo_transfers m
+<span class="kw">LEFT JOIN</span> pg_transactions p
+  <span class="kw">ON</span> m.correlation_id = p.correlation_id</code></pre>
+    </div>
+    
+    <div class="card">
+      <span class="card-label">Why not use transfer ID directly?</span>
+      <p>The transfer ID is MongoDB's <code>_id</code>. PostgreSQL doesn't know it. The <code>correlation_id</code> is explicitly designed to cross this boundary.</p>
+    </div>
+
+    <h3>Tradeoffs and Limitations</h3>
+    <div class="grid-2">
+      <div class="card">
+        <span class="card-label" style="color:var(--success)">What works well</span>
+        <ul>
+          <li>Goroutine fallback keeps the simulator runnable without Temporal infrastructure.</li>
+          <li>Correlation ID pattern generalizes to any two-DB system.</li>
+          <li>Airflow idempotent upserts prevent data corruption.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-label" style="color:var(--danger)">Honest limitations</span>
+        <ul>
+          <li>Temporal runs via <code>start-dev</code> locally — not production-grade.</li>
+          <li>Fraud detection is threshold-based, no ML.</li>
+          <li>Airflow batches run every 5 mins — real systems might use CDC.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-ports">
+      <span class="badge neutral">Spring Boot :8080</span>
+      <span class="badge neutral">Gin + Mongo :8081</span>
+      <span class="badge neutral">FastAPI :8082</span>
+      <span class="badge neutral">Streamlit :8501</span>
+      <span class="badge neutral">Airflow :8083</span>
+      <span class="badge neutral">Temporal UI :8233</span>
+    </div>
+  </footer>
+
+</div>
+
+</body>
+</html>

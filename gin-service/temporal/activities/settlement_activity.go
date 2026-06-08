@@ -15,12 +15,13 @@ type SettlementActivity struct {
 	BankingClient client.BankingClient
 }
 type SettlementInput struct {
-	TransferID   string
-	FromAccount  string
-	ToAccount    string
-	Amount       float64
-	TransferMode string
-	Tpin         string
+	TransferID    string
+	FromAccount   string
+	ToAccount     string
+	Amount        float64
+	TransferMode  string
+	Tpin          string
+	CorrelationID string
 }
 
 func (a *SettlementActivity) SettleTransfer(ctx context.Context, input SettlementInput) error {
@@ -30,6 +31,7 @@ func (a *SettlementActivity) SettleTransfer(ctx context.Context, input Settlemen
 		input.Amount,
 		input.TransferMode,
 		input.Tpin,
+		input.CorrelationID,
 	)
 	status := "FAILED"
 	if err == nil && result != nil {

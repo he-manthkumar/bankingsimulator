@@ -15,8 +15,9 @@ type SettlementWorkflowInput struct {
 	FromAccount  string
 	ToAccount    string
 	Amount       float64
-	TransferMode string
-	Tpin         string
+	TransferMode  string
+	Tpin          string
+	CorrelationID string
 }
 
 func SettlementWorkflow(ctx workflow.Context, input SettlementWorkflowInput) error {
@@ -48,11 +49,12 @@ func SettlementWorkflow(ctx workflow.Context, input SettlementWorkflowInput) err
 
 	var act *activities.SettlementActivity
 	return workflow.ExecuteActivity(ctx, act.SettleTransfer, activities.SettlementInput{
-		TransferID:   input.TransferID,
-		FromAccount:  input.FromAccount,
-		ToAccount:    input.ToAccount,
-		Amount:       input.Amount,
-		TransferMode: input.TransferMode,
-		Tpin:         input.Tpin,
+		TransferID:    input.TransferID,
+		FromAccount:   input.FromAccount,
+		ToAccount:     input.ToAccount,
+		Amount:        input.Amount,
+		TransferMode:  input.TransferMode,
+		Tpin:          input.Tpin,
+		CorrelationID: input.CorrelationID,
 	}).Get(ctx, nil)
 }

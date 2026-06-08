@@ -27,36 +27,39 @@ type TransferRepository interface {
 var Repo TransferRepository
 
 type mongoTransfer struct {
-	ID           string    `bson:"_id"`
-	FromAccount  string    `bson:"from_account"`
-	ToAccount    string    `bson:"to_account"`
-	Amount       float64   `bson:"amount"`
-	TransferMode string    `bson:"transfer_mode"`
-	Status       string    `bson:"status"`
-	CreatedAt    time.Time `bson:"created_at"`
+	ID            string    `bson:"_id"`
+	CorrelationID string    `bson:"correlation_id"`
+	FromAccount   string    `bson:"from_account"`
+	ToAccount     string    `bson:"to_account"`
+	Amount        float64   `bson:"amount"`
+	TransferMode  string    `bson:"transfer_mode"`
+	Status        string    `bson:"status"`
+	CreatedAt     time.Time `bson:"created_at"`
 }
 
 func toMongo(t *models.Transfer) mongoTransfer {
 	return mongoTransfer{
-		ID:           t.ID.String(),
-		FromAccount:  t.FromAccount.String(),
-		ToAccount:    t.ToAccount.String(),
-		Amount:       t.Amount,
-		TransferMode: t.TransferMode,
-		Status:       t.Status,
-		CreatedAt:    t.CreatedAt,
+		ID:            t.ID.String(),
+		CorrelationID: t.CorrelationID,
+		FromAccount:   t.FromAccount.String(),
+		ToAccount:     t.ToAccount.String(),
+		Amount:        t.Amount,
+		TransferMode:  t.TransferMode,
+		Status:        t.Status,
+		CreatedAt:     t.CreatedAt,
 	}
 }
 
 func fromMongo(m mongoTransfer) models.Transfer {
 	return models.Transfer{
-		ID:           uuid.MustParse(m.ID),
-		FromAccount:  uuid.MustParse(m.FromAccount),
-		ToAccount:    uuid.MustParse(m.ToAccount),
-		Amount:       m.Amount,
-		TransferMode: m.TransferMode,
-		Status:       m.Status,
-		CreatedAt:    m.CreatedAt,
+		ID:            uuid.MustParse(m.ID),
+		CorrelationID: m.CorrelationID,
+		FromAccount:   uuid.MustParse(m.FromAccount),
+		ToAccount:     uuid.MustParse(m.ToAccount),
+		Amount:        m.Amount,
+		TransferMode:  m.TransferMode,
+		Status:        m.Status,
+		CreatedAt:     m.CreatedAt,
 	}
 }
 

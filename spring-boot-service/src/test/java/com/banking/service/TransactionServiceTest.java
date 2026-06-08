@@ -45,7 +45,7 @@ public class TransactionServiceTest
 
         receiver = Account.builder().id(toId).name("Arigela").balance(new BigDecimal("2000.00")).tpin("5678").build();
 
-        mockTransaction = Transaction.builder().id(UUID.randomUUID()).fromAccount(fromId).toAccount(toId).amount(new BigDecimal("1000.00")).transferMode("NEFT").status("SUCCESS").build();
+        mockTransaction = Transaction.builder().id(UUID.randomUUID()).fromAccount(fromId).toAccount(toId).amount(new BigDecimal("1000.00")).transferMode("NEFT").status("SUCCESS").correlationId(UUID.randomUUID()).build();
     }
 
     @Test
@@ -55,9 +55,9 @@ public class TransactionServiceTest
 
         when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
 
-        when(transactionRepository.save(argThat(txn -> txn.getFromAccount().equals(fromId) && txn.getToAccount().equals(toId) && txn.getAmount().compareTo(new BigDecimal("1000.00")) == 0 && txn.getTransferMode().equals("NEFT")))).thenReturn(mockTransaction);
+        when(transactionRepository.save(argThat(txn -> txn.getFromAccount().equals(fromId) && txn.getToAccount().equals(toId) && txn.getAmount().compareTo(new BigDecimal("1000.00")) == 0 && txn.getTransferMode().equals("NEFT") && txn.getCorrelationId() != null))).thenReturn(mockTransaction);
 
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234");
+        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234", "corr-test-id");
 
         assertThat(result.getStatus()).isEqualTo("SUCCESS");
 
@@ -65,7 +65,7 @@ public class TransactionServiceTest
 
         verify(accountRepository, times(1)).save(receiver);
 
-        verify(transactionRepository, times(1)).save(argThat(txn -> txn.getFromAccount().equals(fromId) && txn.getToAccount().equals(toId) && txn.getAmount().compareTo(new BigDecimal("1000.00")) == 0 && txn.getTransferMode().equals("NEFT")));
+        verify(transactionRepository, times(1)).save(argThat(txn -> txn.getFromAccount().equals(fromId) && txn.getToAccount().equals(toId) && txn.getAmount().compareTo(new BigDecimal("1000.00")) == 0 && txn.getTransferMode().equals("NEFT") && txn.getCorrelationId() != null));
     }
 
     @Test
@@ -77,7 +77,7 @@ public class TransactionServiceTest
 
         when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS")))).thenReturn(mockTransaction);
 
-        transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234");
+        transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234", "corr-test-id");
 
         assertThat(sender.getBalance()).isEqualByComparingTo("4000.00");
     }
@@ -91,7 +91,7 @@ public class TransactionServiceTest
 
         when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS")))).thenReturn(mockTransaction);
 
-        transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234");
+        transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234", "corr-test-id");
 
         assertThat(receiver.getBalance()).isEqualByComparingTo("3000.00");
     }
@@ -107,7 +107,7 @@ public class TransactionServiceTest
 
         when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("FAILED")))).thenReturn(failedTxn);
 
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "9999");
+        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "9999", "corr-test-id");
 
         assertThat(result.getStatus()).isEqualTo("FAILED");
 
@@ -127,7 +127,7 @@ public class TransactionServiceTest
 
         when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("FAILED")))).thenReturn(failedTxn);
 
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("500.00"), "UPI", "");
+        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("500.00"), "UPI", "", "corr-test-id");
 
         assertThat(result.getStatus()).isEqualTo("FAILED");
 
@@ -145,7 +145,7 @@ public class TransactionServiceTest
 
         when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("FAILED")))).thenReturn(failedTxn);
 
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("9999.00"), "IMPS", "1234");
+        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("9999.00"), "IMPS", "1234", "corr-test-id");
 
         assertThat(result.getStatus()).isEqualTo("FAILED");
 
@@ -171,7 +171,7 @@ public class TransactionServiceTest
         when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS"))))
             .thenReturn(exactBalanceTxn);  
 
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("5000.00"), "NEFT", "1234");
+        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("5000.00"), "NEFT", "1234", "corr-test-id");
 
         assertThat(sender.getBalance()).isEqualByComparingTo("0.00");
         assertThat(result.getAmount()).isEqualByComparingTo("5000.00");
@@ -185,7 +185,7 @@ public class TransactionServiceTest
     {
         when(accountRepository.findById(fromId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234")).isInstanceOf(RuntimeException.class).hasMessage("Sender account not found");
+        assertThatThrownBy(() -> transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234", "corr-test-id")).isInstanceOf(RuntimeException.class).hasMessage("Sender account not found");
 
         verify(transactionRepository, never()).save(argThat(txn -> true));
     }
@@ -197,7 +197,7 @@ public class TransactionServiceTest
 
         when(accountRepository.findById(toId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234")).isInstanceOf(RuntimeException.class).hasMessage("Receiver account not found");
+        assertThatThrownBy(() -> transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234", "corr-test-id")).isInstanceOf(RuntimeException.class).hasMessage("Receiver account not found");
 
         verify(transactionRepository, never()).save(argThat(txn -> true));
     }

@@ -41,7 +41,8 @@ public class TransactionController {
         BigDecimal amount = body.getAmount();
         String transferMode = body.getTransferMode();
         String tpin = body.getTpin();
-        Transaction txn = transactionService.settleTransfer(fromAccount, toAccount, amount, transferMode, tpin);
+        String correlationId = body.getCorrelationId();
+        Transaction txn = transactionService.settleTransfer(fromAccount, toAccount, amount, transferMode, tpin, correlationId);
         return ResponseEntity.ok(txn);
     }
 

@@ -888,7 +888,7 @@ elif page == "Transfer":
                                 {to_name}
                             </div>
                             <div style="font-size:0.72rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:0.15rem;">
-                                HASH ID: {tid}
+                                Transfer ID: {tid}
                             </div>
                         </div>
                         <div style="text-align:right;">
