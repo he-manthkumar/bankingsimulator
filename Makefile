@@ -29,6 +29,8 @@ clean:
 	rm -rf spring-boot-service/build/reports
 	@echo "Done."
 
+build:
+	docker-compose up -d --build
 up:
 	docker-compose up -d
 down:
