@@ -23,14 +23,20 @@ import (
 	temporalclient "go.temporal.io/sdk/client"
 )
 
+
 type mockBankingClient struct {
-	result *client.SettleTransferResponse
-	err    error
+	err error
 }
 
-func (m *mockBankingClient) SettleTransfer(fromAccount, toAccount string, amount float64, transferMode, tpin string) (*client.SettleTransferResponse, error) {
-	return m.result, m.err
+
+func (m *mockBankingClient) DebitAccount(accountID string, amount float64, transferRef, tpin string) (*client.DebitResult, error) {
+	return &client.DebitResult{}, m.err
 }
+
+func (m *mockBankingClient) CreditAccount(accountID string, amount float64, transferRef string) (*client.CreditResult, error) {
+	return &client.CreditResult{}, m.err
+}
+
 
 func setupTestDB(t *testing.T) *mongo.Client {
 	t.Helper()
@@ -51,22 +57,27 @@ func setupTestDB(t *testing.T) *mongo.Client {
 	col := mongoClient.Database("banking_test").Collection(colName)
 	db.Repo = &db.MongoTransferRepo{Col: col}
 
+	outboxCol := mongoClient.Database("banking_test").Collection("outbox_" + uuid.New().String()[:8])
+	db.OutboxRepo = &db.MongoOutboxRepo{Col: outboxCol}
+
+	db.MongoClient = mongoClient
+
 	t.Cleanup(func() {
 		col.Drop(context.Background())
+		outboxCol.Drop(context.Background())
 		mongoClient.Disconnect(context.Background())
 	})
 
 	return mongoClient
 }
 
-func setupRouterWithClient(bc client.BankingClient) *gin.Engine {
+func setupRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/transfer", func(c *gin.Context) {
-		ProcessTransferWithClient(c, bc)
-	})
+	r.POST("/transfer", ProcessTransfer)
 	r.GET("/transfer/:id", GetTransferStatus)
 	r.GET("/transfers", GetAllTransfers)
+	r.PUT("/transfer/:id/cancel", CancelTransfer)
 	return r
 }
 
@@ -97,6 +108,43 @@ func (m *TemporalClient_) ExecuteWorkflow(
 
 func (m *TemporalClient_) Close() {}
 
+// mockUpdateHandle implements temporalclient.WorkflowUpdateHandle and is returned
+// by the UpdateWorkflow mock so the handler can call handle.Get(...).
+type mockUpdateHandle struct {
+	getErr error
+}
+
+func (h *mockUpdateHandle) WorkflowID() string { return "" }
+func (h *mockUpdateHandle) RunID() string       { return "" }
+func (h *mockUpdateHandle) UpdateID() string    { return "" }
+func (h *mockUpdateHandle) Get(ctx context.Context, valuePtr interface{}) error {
+	return h.getErr
+}
+
+// cancelTemporalClient_ extends TemporalClient_ with UpdateWorkflow support for
+// CancelTransfer handler tests.
+type cancelTemporalClient_ struct {
+	TemporalClient_
+	updateErr    error // error returned from UpdateWorkflow itself (transport-level)
+	handleGetErr error // error returned from handle.Get (business-level rejection)
+	updateCalled bool
+	lastWorkflowID string
+	lastUpdateName string
+}
+
+func (m *cancelTemporalClient_) UpdateWorkflow(
+	_ context.Context,
+	options temporalclient.UpdateWorkflowOptions,
+) (temporalclient.WorkflowUpdateHandle, error) {
+	m.updateCalled = true
+	m.lastWorkflowID = options.WorkflowID
+	m.lastUpdateName = options.UpdateName
+	if m.updateErr != nil {
+		return nil, m.updateErr
+	}
+	return &mockUpdateHandle{getErr: m.handleGetErr}, nil
+}
+
 func withTemporalClient(t *testing.T, tc temporalclient.Client) {
 	t.Helper()
 	TemporalClient = tc
@@ -104,28 +152,9 @@ func withTemporalClient(t *testing.T, tc temporalclient.Client) {
 }
 
 
-func Test_GetInitialStatus_shouldReturnSuccessWhenModeIsIMPS(t *testing.T) {
-	assert.Equal(t, "SUCCESS", getInitialStatus("IMPS"))
-}
-
-func Test_GetInitialStatus_shouldReturnPendingWhenModeIsNEFT(t *testing.T) {
-	assert.Equal(t, "PENDING", getInitialStatus("NEFT"))
-}
-
-func Test_GetInitialStatus_shouldReturnProcessingWhenModeIsRTGS(t *testing.T) {
-	assert.Equal(t, "PROCESSING", getInitialStatus("RTGS"))
-}
-
-func Test_GetInitialStatus_shouldReturnPendingWhenModeIsUnknown(t *testing.T) {
-	assert.Equal(t, "PENDING", getInitialStatus("HEMANTH"))
-}
-
-
 func Test_ProcessTransfer_shouldReturn400WhenRequestBodyIsEmpty(t *testing.T) {
 	setupTestDB(t)
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.POST("/transfer", ProcessTransfer)
+	r := setupRouter()
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", bytes.NewBufferString("{}"))
@@ -137,13 +166,31 @@ func Test_ProcessTransfer_shouldReturn400WhenRequestBodyIsEmpty(t *testing.T) {
 
 func Test_ProcessTransfer_shouldReturn400WhenRequestBodyIsMissingRequiredFields(t *testing.T) {
 	setupTestDB(t)
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.POST("/transfer", ProcessTransfer)
-	fromID := uuid.New().String()
+	r := setupRouter()
+
+	body := map[string]interface{}{"from_account": uuid.New().String()}
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var respBody map[string]interface{}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	assert.Contains(t, respBody, "error")
+}
+
+func Test_ProcessTransfer_shouldReturn400WhenFromAccountIsNotValidUUID(t *testing.T) {
+	setupTestDB(t)
+	r := setupRouter()
 
 	body := map[string]interface{}{
-		"from_account": fromID,
+		"from_account":  "not-a-uuid",
+		"to_account":    uuid.New().String(),
+		"amount":        500.0,
+		"transfer_mode": "NEFT",
+		"tpin":          "1234",
 	}
 
 	w := httptest.NewRecorder()
@@ -152,32 +199,6 @@ func Test_ProcessTransfer_shouldReturn400WhenRequestBodyIsMissingRequiredFields(
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var respBody map[string]interface{}
-	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
-	assert.Contains(t, respBody, "error")
-}
-
-func Test_ProcessTransfer_shouldReturn400WhenFromAccountIsNotValidUUID(t *testing.T) {
-	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
-	toID := uuid.New().String()
-
-	body := map[string]interface{}{
-		"from_account":  "not-a-uuid",
-		"to_account":    toID,
-		"amount":        500.0,
-		"transfer_mode": "IMPS",
-		"tpin":          "1234",
-	}
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
-	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
 	var respBody map[string]interface{}
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "error")
@@ -185,11 +206,10 @@ func Test_ProcessTransfer_shouldReturn400WhenFromAccountIsNotValidUUID(t *testin
 
 func Test_ProcessTransfer_shouldReturn400WhenToAccountIsNotValidUUID(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
-	fromID := uuid.New().String()
+	r := setupRouter()
 
 	body := map[string]interface{}{
-		"from_account":  fromID,
+		"from_account":  uuid.New().String(),
 		"to_account":    "invalid-uuid",
 		"amount":        500.0,
 		"transfer_mode": "IMPS",
@@ -199,10 +219,9 @@ func Test_ProcessTransfer_shouldReturn400WhenToAccountIsNotValidUUID(t *testing.
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-
 	var respBody map[string]interface{}
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "error")
@@ -210,13 +229,11 @@ func Test_ProcessTransfer_shouldReturn400WhenToAccountIsNotValidUUID(t *testing.
 
 func Test_ProcessTransfer_shouldReturn400WhenAmountIsZero(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
-	fromID := uuid.New().String()
-	toID := uuid.New().String()
+	r := setupRouter()
 
 	body := map[string]any{
-		"from_account":  fromID,
-		"to_account":    toID,
+		"from_account":  uuid.New().String(),
+		"to_account":    uuid.New().String(),
 		"amount":        0,
 		"transfer_mode": "IMPS",
 		"tpin":          "1234",
@@ -225,10 +242,9 @@ func Test_ProcessTransfer_shouldReturn400WhenAmountIsZero(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "error")
@@ -236,13 +252,11 @@ func Test_ProcessTransfer_shouldReturn400WhenAmountIsZero(t *testing.T) {
 
 func Test_ProcessTransfer_shouldReturn400WhenAmountIsNegative(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
-	fromID := uuid.New().String()
-	toID := uuid.New().String()
+	r := setupRouter()
 
 	body := map[string]any{
-		"from_account":  fromID,
-		"to_account":    toID,
+		"from_account":  uuid.New().String(),
+		"to_account":    uuid.New().String(),
 		"amount":        -100.0,
 		"transfer_mode": "IMPS",
 		"tpin":          "1234",
@@ -251,10 +265,9 @@ func Test_ProcessTransfer_shouldReturn400WhenAmountIsNegative(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "error")
@@ -262,13 +275,11 @@ func Test_ProcessTransfer_shouldReturn400WhenAmountIsNegative(t *testing.T) {
 
 func Test_ProcessTransfer_shouldReturn400WhenTransferModeIsNotNEFTOrRTGSOrIMPS(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
-	fromID := uuid.New().String()
-	toID := uuid.New().String()
+	r := setupRouter()
 
 	body := map[string]any{
-		"from_account":  fromID,
-		"to_account":    toID,
+		"from_account":  uuid.New().String(),
+		"to_account":    uuid.New().String(),
 		"amount":        100.0,
 		"transfer_mode": "WIRE",
 		"tpin":          "1234",
@@ -277,27 +288,22 @@ func Test_ProcessTransfer_shouldReturn400WhenTransferModeIsNotNEFTOrRTGSOrIMPS(t
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "error")
 }
 
 
-func Test_ProcessTransfer_shouldReturn202WhenIMPSTransferIsSettledSuccessfully(t *testing.T) {
+func Test_ProcessTransfer_shouldReturn202WithPendingStatusForIMPS(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{
-		result: &client.SettleTransferResponse{Status: "SUCCESS"},
-	})
-	fromID := uuid.New().String()
-	toID := uuid.New().String()
+	r := setupRouter()
 
 	body := map[string]any{
-		"from_account":  fromID,
-		"to_account":    toID,
+		"from_account":  uuid.New().String(),
+		"to_account":    uuid.New().String(),
 		"amount":        250.0,
 		"transfer_mode": "IMPS",
 		"tpin":          "1234",
@@ -306,10 +312,9 @@ func Test_ProcessTransfer_shouldReturn202WhenIMPSTransferIsSettledSuccessfully(t
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "message")
@@ -317,52 +322,16 @@ func Test_ProcessTransfer_shouldReturn202WhenIMPSTransferIsSettledSuccessfully(t
 
 	transfer, ok := respBody["transfer"].(map[string]interface{})
 	assert.True(t, ok)
-	assert.Equal(t, "SUCCESS", transfer["status"])
+	assert.Equal(t, "PENDING", transfer["status"])
 }
 
-func Test_ProcessTransfer_shouldReturn202WhenIMPSTransferIsMarkedFailedWhenCoreBankingReturnsError(t *testing.T) {
+func Test_ProcessTransfer_shouldReturn202WithPendingStatusForNEFT(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{
-		err: errors.New("service unavailable"),
-	})
-	fromID := uuid.New().String()
-	toID := uuid.New().String()
+	r := setupRouter()
 
 	body := map[string]any{
-		"from_account":  fromID,
-		"to_account":    toID,
-		"amount":        250.0,
-		"transfer_mode": "IMPS",
-		"tpin":          "1234",
-	}
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
-	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusAccepted, w.Code)
-
-	var respBody map[string]any
-	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
-	assert.Contains(t, respBody, "message")
-	assert.Contains(t, respBody, "transfer")
-
-	transfer, ok := respBody["transfer"].(map[string]interface{})
-	assert.True(t, ok)
-	assert.Equal(t, "FAILED", transfer["status"])
-}
-
-
-func Test_ProcessTransfer_shouldReturn202WhenNEFTTransferIsInitiatedAsynchronously(t *testing.T) {
-	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
-	fromID := uuid.New().String()
-	toID := uuid.New().String()
-
-	body := map[string]any{
-		"from_account":  fromID,
-		"to_account":    toID,
+		"from_account":  uuid.New().String(),
+		"to_account":    uuid.New().String(),
 		"amount":        1000.0,
 		"transfer_mode": "NEFT",
 		"tpin":          "1234",
@@ -371,10 +340,9 @@ func Test_ProcessTransfer_shouldReturn202WhenNEFTTransferIsInitiatedAsynchronous
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "message")
@@ -385,15 +353,13 @@ func Test_ProcessTransfer_shouldReturn202WhenNEFTTransferIsInitiatedAsynchronous
 	assert.Equal(t, "PENDING", transfer["status"])
 }
 
-func Test_ProcessTransfer_shouldReturn202WhenRTGSTransferIsInitiatedAsynchronously(t *testing.T) {
+func Test_ProcessTransfer_shouldReturn202WithPendingStatusForRTGS(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
-	fromID := uuid.New().String()
-	toID := uuid.New().String()
+	r := setupRouter()
 
 	body := map[string]any{
-		"from_account":  fromID,
-		"to_account":    toID,
+		"from_account":  uuid.New().String(),
+		"to_account":    uuid.New().String(),
 		"amount":        200000.0,
 		"transfer_mode": "RTGS",
 		"tpin":          "1234",
@@ -402,10 +368,9 @@ func Test_ProcessTransfer_shouldReturn202WhenRTGSTransferIsInitiatedAsynchronous
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "message")
@@ -413,7 +378,7 @@ func Test_ProcessTransfer_shouldReturn202WhenRTGSTransferIsInitiatedAsynchronous
 
 	transfer, ok := respBody["transfer"].(map[string]any)
 	assert.True(t, ok)
-	assert.Equal(t, "PROCESSING", transfer["status"])
+	assert.Equal(t, "PENDING", transfer["status"])
 }
 
 
@@ -421,10 +386,7 @@ func Test_ProcessTransfer_shouldStartTemporalWorkflowForNEFT(t *testing.T) {
 	setupTestDB(t)
 	mockTC := &TemporalClient_{}
 	withTemporalClient(t, mockTC)
-
-	router := setupRouterWithClient(&mockBankingClient{
-		result: &client.SettleTransferResponse{Status: "SUCCESS"},
-	})
+	r := setupRouter()
 
 	body := map[string]any{
 		"from_account":  uuid.New().String(),
@@ -437,7 +399,7 @@ func Test_ProcessTransfer_shouldStartTemporalWorkflowForNEFT(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	assert.True(t, mockTC.executeCalled, "expected Temporal ExecuteWorkflow to be called for NEFT")
@@ -447,10 +409,7 @@ func Test_ProcessTransfer_shouldStartTemporalWorkflowForRTGS(t *testing.T) {
 	setupTestDB(t)
 	mockTC := &TemporalClient_{}
 	withTemporalClient(t, mockTC)
-
-	router := setupRouterWithClient(&mockBankingClient{
-		result: &client.SettleTransferResponse{Status: "SUCCESS"},
-	})
+	r := setupRouter()
 
 	body := map[string]any{
 		"from_account":  uuid.New().String(),
@@ -463,20 +422,40 @@ func Test_ProcessTransfer_shouldStartTemporalWorkflowForRTGS(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	assert.True(t, mockTC.executeCalled, "expected Temporal ExecuteWorkflow to be called for RTGS")
+}
+
+func Test_ProcessTransfer_shouldStartTemporalWorkflowForIMPS(t *testing.T) {
+	setupTestDB(t)
+	mockTC := &TemporalClient_{}
+	withTemporalClient(t, mockTC)
+	r := setupRouter()
+
+	body := map[string]any{
+		"from_account":  uuid.New().String(),
+		"to_account":    uuid.New().String(),
+		"amount":        500.0,
+		"transfer_mode": "IMPS",
+		"tpin":          "1234",
+	}
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
+	assert.True(t, mockTC.executeCalled, "expected Temporal ExecuteWorkflow to be called for IMPS")
 }
 
 func Test_ProcessTransfer_shouldStillReturn202EvenWhenTemporalWorkflowStartFails(t *testing.T) {
 	setupTestDB(t)
 	mockTC := &TemporalClient_{returnErr: errors.New("temporal unavailable")}
 	withTemporalClient(t, mockTC)
-
-	router := setupRouterWithClient(&mockBankingClient{
-		result: &client.SettleTransferResponse{Status: "SUCCESS"},
-	})
+	r := setupRouter()
 
 	body := map[string]any{
 		"from_account":  uuid.New().String(),
@@ -489,16 +468,13 @@ func Test_ProcessTransfer_shouldStillReturn202EvenWhenTemporalWorkflowStartFails
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusAccepted, w.Code)
 }
 
-func Test_ProcessTransfer_shouldFallBackToGoroutineWhenTemporalClientIsNil(t *testing.T) {
+func Test_ProcessTransfer_shouldReturn202EvenWhenTemporalClientIsNil(t *testing.T) {
 	setupTestDB(t)
-
-	router := setupRouterWithClient(&mockBankingClient{
-		result: &client.SettleTransferResponse{Status: "SUCCESS"},
-	})
+	r := setupRouter()
 
 	body := map[string]any{
 		"from_account":  uuid.New().String(),
@@ -511,7 +487,7 @@ func Test_ProcessTransfer_shouldFallBackToGoroutineWhenTemporalClientIsNil(t *te
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/transfer", toJSON(t, body))
 	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	assert.Contains(t, w.Body.String(), "NEFT transfer initiated")
@@ -520,14 +496,13 @@ func Test_ProcessTransfer_shouldFallBackToGoroutineWhenTemporalClientIsNil(t *te
 
 func Test_GetTransferStatus_shouldReturn400WhenTransferIDIsNotValidUUID(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
+	r := setupRouter()
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/transfer/bad-id", nil)
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "error")
@@ -535,14 +510,13 @@ func Test_GetTransferStatus_shouldReturn400WhenTransferIDIsNotValidUUID(t *testi
 
 func Test_GetTransferStatus_shouldReturn404WhenTransferIsNotFoundInDatabase(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
+	r := setupRouter()
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/transfer/"+uuid.New().String(), nil)
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "error")
@@ -550,7 +524,7 @@ func Test_GetTransferStatus_shouldReturn404WhenTransferIsNotFoundInDatabase(t *t
 
 func Test_GetTransferStatus_shouldReturn200WhenTransferExistsInDatabase(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
+	r := setupRouter()
 
 	transfer := models.Transfer{
 		ID:           uuid.New(),
@@ -564,10 +538,9 @@ func Test_GetTransferStatus_shouldReturn200WhenTransferExistsInDatabase(t *testi
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/transfer/"+transfer.ID.String(), nil)
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Equal(t, transfer.ID.String(), respBody["id"])
@@ -578,14 +551,13 @@ func Test_GetTransferStatus_shouldReturn200WhenTransferExistsInDatabase(t *testi
 
 func Test_GetAllTransfers_shouldReturn200WithEmptyListWhenNoTransfersExist(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
+	r := setupRouter()
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/transfers", nil)
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-
 	var respBody []any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Len(t, respBody, 0)
@@ -593,7 +565,7 @@ func Test_GetAllTransfers_shouldReturn200WithEmptyListWhenNoTransfersExist(t *te
 
 func Test_GetAllTransfers_shouldReturn200WithAllTransfersWhenTransfersExist(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
+	r := setupRouter()
 
 	transfer1 := models.Transfer{
 		ID:           uuid.New(),
@@ -616,10 +588,9 @@ func Test_GetAllTransfers_shouldReturn200WithAllTransfersWhenTransfersExist(t *t
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/transfers", nil)
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-
 	var respBody []any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Len(t, respBody, 2)
@@ -627,7 +598,7 @@ func Test_GetAllTransfers_shouldReturn200WithAllTransfersWhenTransfersExist(t *t
 
 func Test_GetAllTransfers_shouldReturn200WithTransfersOrderedByCreatedAtDescending(t *testing.T) {
 	setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
+	r := setupRouter()
 
 	oldTransfer := models.Transfer{
 		ID:           uuid.New(),
@@ -652,10 +623,9 @@ func Test_GetAllTransfers_shouldReturn200WithTransfersOrderedByCreatedAtDescendi
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/transfers", nil)
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-
 	var respBody []map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Len(t, respBody, 2)
@@ -665,67 +635,124 @@ func Test_GetAllTransfers_shouldReturn200WithTransfersOrderedByCreatedAtDescendi
 
 func Test_GetAllTransfers_shouldReturn500WhenDatabaseFails(t *testing.T) {
 	mongoClient := setupTestDB(t)
-	router := setupRouterWithClient(&mockBankingClient{})
+	r := setupRouter()
 
-	// Disconnect the MongoDB client to force a database error.
 	mongoClient.Disconnect(context.Background())
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/transfers", nil)
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
 	var respBody map[string]any
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	assert.Contains(t, respBody, "error")
 }
 
+// ─── CancelTransfer tests ────────────────────────────────────────────────────
 
-func Test_SimulateSettlement_shouldMarkTransferAsFailedWhenCoreBankingClientReturnsErrorForNEFT(t *testing.T) {
+func Test_CancelTransfer_shouldReturn400WhenTransferIDIsNotValidUUID(t *testing.T) {
+	setupTestDB(t)
+	r := setupRouter()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/transfer/not-a-uuid/cancel", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var respBody map[string]any
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	assert.Contains(t, respBody, "error")
+}
+
+// CancelTransfer checks TemporalClient == nil before touching the DB; when no
+// Temporal client is set the handler returns 503 immediately.
+func Test_CancelTransfer_shouldReturn503WhenTemporalClientIsNil(t *testing.T) {
+	setupTestDB(t)
+	// Ensure TemporalClient is nil (default after setupTestDB cleanup).
+	TemporalClient = nil
+	r := setupRouter()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/transfer/"+uuid.New().String()+"/cancel", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	var respBody map[string]any
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	assert.Contains(t, respBody, "error")
+}
+
+func Test_CancelTransfer_shouldReturn200WhenCancellationSucceeds(t *testing.T) {
 	setupTestDB(t)
 
+	// Seed a PENDING transfer so there is something to cancel.
 	transfer := models.Transfer{
 		ID:           uuid.New(),
 		FromAccount:  uuid.New(),
 		ToAccount:    uuid.New(),
-		Amount:       1000.0,
+		Amount:       500.0,
 		TransferMode: "NEFT",
 		Status:       "PENDING",
 	}
-	db.Repo.Create(context.Background(), &transfer)
+	assert.NoError(t, db.Repo.Create(context.Background(), &transfer))
 
-	mockClient := &mockBankingClient{err: errors.New("service unavailable")}
+	// Mock that UpdateWorkflow succeeds and handle.Get returns nil.
+	mockTC := &cancelTemporalClient_{}
+	withTemporalClient(t, mockTC)
+	r := setupRouter()
 
-	simulateSettlement(transfer, mockClient, "1234")
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/transfer/"+transfer.ID.String()+"/cancel", nil)
+	r.ServeHTTP(w, req)
 
-	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, mockTC.updateCalled, "expected UpdateWorkflow to be called")
+	assert.Equal(t, "settlement-"+transfer.ID.String(), mockTC.lastWorkflowID)
+	assert.Equal(t, "requestCancellation", mockTC.lastUpdateName)
 
-	updated, err := db.Repo.FindByID(context.Background(), transfer.ID)
-	assert.NoError(t, err)
-	assert.Equal(t, "FAILED", updated.Status)
+	var respBody map[string]any
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	assert.Equal(t, "cancellation confirmed", respBody["message"])
 }
 
-func Test_SimulateSettlement_shouldMarkTransferAsFailedWhenCoreBankingClientReturnsErrorForRTGS(t *testing.T) {
+func Test_CancelTransfer_shouldReturn409WhenWorkflowRejectsCancel(t *testing.T) {
 	setupTestDB(t)
 
-	transfer := models.Transfer{
-		ID:           uuid.New(),
-		FromAccount:  uuid.New(),
-		ToAccount:    uuid.New(),
-		Amount:       1000.0,
-		TransferMode: "RTGS",
-		Status:       "PROCESSING",
+	// Mock UpdateWorkflow succeeds at the transport level but handle.Get returns
+	// a business-level error (e.g. "cannot cancel: transfer is already DEBITING").
+	mockTC := &cancelTemporalClient_{
+		handleGetErr: errors.New("cannot cancel: transfer is already DEBITING"),
 	}
-	db.Repo.Create(context.Background(), &transfer)
+	withTemporalClient(t, mockTC)
+	r := setupRouter()
 
-	mockClient := &mockBankingClient{err: errors.New("service unavailable")}
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/transfer/"+uuid.New().String()+"/cancel", nil)
+	r.ServeHTTP(w, req)
 
-	simulateSettlement(transfer, mockClient, "1234")
+	assert.Equal(t, http.StatusConflict, w.Code)
+	var respBody map[string]any
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	assert.Contains(t, respBody, "error")
+}
 
-	time.Sleep(100 * time.Millisecond)
+func Test_CancelTransfer_shouldReturn500WhenUpdateWorkflowFails(t *testing.T) {
+	setupTestDB(t)
 
-	updated, err := db.Repo.FindByID(context.Background(), transfer.ID)
-	assert.NoError(t, err)
-	assert.Equal(t, "FAILED", updated.Status)
+	// Mock UpdateWorkflow failing at the transport level (e.g. network error).
+	mockTC := &cancelTemporalClient_{
+		updateErr: errors.New("temporal server unreachable"),
+	}
+	withTemporalClient(t, mockTC)
+	r := setupRouter()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/transfer/"+uuid.New().String()+"/cancel", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var respBody map[string]any
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	assert.Contains(t, respBody, "error")
 }

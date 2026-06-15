@@ -6,7 +6,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.banking.dto.CreateTransactionRequest;
 import jakarta.validation.Valid;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,43 +15,29 @@ public class TransactionController {
 
     private final TransactionService transactionService;
 
-<span class="fc" id="L19">    public TransactionController(TransactionService transactionService) {</span>
-<span class="fc" id="L20">        this.transactionService = transactionService;</span>
-<span class="fc" id="L21">    }</span>
+<span class="fc" id="L18">    public TransactionController(TransactionService transactionService) {</span>
+<span class="fc" id="L19">        this.transactionService = transactionService;</span>
+<span class="fc" id="L20">    }</span>
 
     @PostMapping
     public ResponseEntity&lt;Transaction&gt; saveTransaction(@Valid @RequestBody CreateTransactionRequest body) {
-<span class="fc" id="L25">        UUID fromAccount = body.getFromAccount();</span>
-<span class="fc" id="L26">        UUID toAccount = body.getToAccount();</span>
-<span class="fc" id="L27">        BigDecimal amount = body.getAmount();</span>
-<span class="fc" id="L28">        String transferMode = body.getTransferMode();</span>
-<span class="fc" id="L29">        String status = body.getStatus();</span>
-<span class="fc" id="L30">        Transaction txn = transactionService.saveTransaction(fromAccount, toAccount, amount, transferMode, status);</span>
-<span class="fc" id="L31">        return ResponseEntity.ok(txn);</span>
-    }
-
-    @PostMapping(&quot;/settle&quot;)
-    public ResponseEntity&lt;Transaction&gt; settleTransfer(@Valid @RequestBody CreateTransactionRequest body) {
-<span class="fc bfc" id="L36" title="All 4 branches covered.">        if (body.getTpin() == null || body.getTpin().isBlank()) {</span>
-<span class="fc" id="L37">            return ResponseEntity.badRequest().build();</span>
-        }
-<span class="fc" id="L39">        UUID fromAccount = body.getFromAccount();</span>
-<span class="fc" id="L40">        UUID toAccount = body.getToAccount();</span>
-<span class="fc" id="L41">        BigDecimal amount = body.getAmount();</span>
-<span class="fc" id="L42">        String transferMode = body.getTransferMode();</span>
-<span class="fc" id="L43">        String tpin = body.getTpin();</span>
-<span class="fc" id="L44">        Transaction txn = transactionService.settleTransfer(fromAccount, toAccount, amount, transferMode, tpin);</span>
-<span class="fc" id="L45">        return ResponseEntity.ok(txn);</span>
+<span class="fc" id="L24">        Transaction txn = transactionService.saveTransaction(</span>
+<span class="fc" id="L25">                body.getFromAccount(),</span>
+<span class="fc" id="L26">                body.getToAccount(),</span>
+<span class="fc" id="L27">                body.getAmount(),</span>
+<span class="fc" id="L28">                body.getTransferMode(),</span>
+<span class="fc" id="L29">                body.getStatus());</span>
+<span class="fc" id="L30">        return ResponseEntity.ok(txn);</span>
     }
 
     @GetMapping(&quot;/{id}&quot;)
     public ResponseEntity&lt;Transaction&gt; getTransaction(@PathVariable UUID id) {
-<span class="fc" id="L50">        return transactionService.getTransaction(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());</span>
+<span class="fc" id="L35">        return transactionService.getTransaction(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());</span>
     }
 
     @GetMapping(&quot;/all&quot;)
     public ResponseEntity&lt;List&lt;Transaction&gt;&gt; getAllTransactions() {
-<span class="fc" id="L55">        return ResponseEntity.ok(transactionService.getAllTransactions());</span>
+<span class="fc" id="L40">        return ResponseEntity.ok(transactionService.getAllTransactions());</span>
     }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.13.202504020838</span></div></body></html>

@@ -13,6 +13,9 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.banking.dto.DebitResult;
+import com.banking.dto.CreditResult;
+
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.HashMap;
@@ -186,4 +189,145 @@ public class AccountControllerTest {
         mockMvc.perform(get("/accounts/{id}/transactions", unknownId)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
     }
+    @Test
+    void test_debitAccount_shouldReturnResultWhenValidRequest() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("amount", "500.00");
+        body.put("transferRef", "TXN-REF-001");
+        body.put("tpin", "1234");
+
+        DebitResult result = new DebitResult();
+        result.setAccountId(UUID.randomUUID());
+        result.setNewBalance(new BigDecimal("4500.00"));
+
+        when(transactionService.debitAccount(accountId, new BigDecimal("500.00"), "TXN-REF-001", "1234"))
+                .thenReturn(result);
+
+        mockMvc.perform(post("/accounts/{id}/debit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.newBalance").value(4500.00));
+    }
+
+    @Test
+    void test_debitAccount_shouldReturn400WhenInsufficientFunds() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("amount", "10000.00");
+        body.put("transferRef", "TXN-REF-002");
+        body.put("tpin", "1234");
+
+        when(transactionService.debitAccount(accountId, new BigDecimal("10000.00"), "TXN-REF-002", "1234"))
+                .thenThrow(new RuntimeException("Insufficient funds"));
+
+        mockMvc.perform(post("/accounts/{id}/debit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Insufficient funds"));
+    }
+
+    @Test
+    void test_debitAccount_shouldReturn400WhenIncorrectTpin() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("amount", "500.00");
+        body.put("transferRef", "TXN-REF-003");
+        body.put("tpin", "0000");
+
+        when(transactionService.debitAccount(accountId, new BigDecimal("500.00"), "TXN-REF-003", "0000"))
+                .thenThrow(new RuntimeException("Invalid TPIN"));
+
+        mockMvc.perform(post("/accounts/{id}/debit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid TPIN"));
+    }
+
+    @Test
+    void test_debitAccount_shouldReturn400WhenAmountNotProvided() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("transferRef", "TXN-REF-004");
+        body.put("tpin", "1234");
+
+        mockMvc.perform(post("/accounts/{id}/debit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void test_debitAccount_shouldReturn400WhenAmountIsNegative() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("amount", "-50.00");
+        body.put("transferRef", "TXN-REF-005");
+        body.put("tpin", "1234");
+
+        mockMvc.perform(post("/accounts/{id}/debit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void test_debitAccount_shouldReturn400WhenTpinNotProvided() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("amount", "500.00");
+        body.put("transferRef", "TXN-REF-006");
+
+        mockMvc.perform(post("/accounts/{id}/debit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void test_creditAccount_shouldReturnResultWhenValidRequest() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("amount", "1000.00");
+        body.put("transferRef", "TXN-REF-007");
+
+        CreditResult result = new CreditResult();
+        result.setAccountId(UUID.randomUUID());
+        result.setNewBalance(new BigDecimal("6000.00"));
+
+        when(transactionService.creditAccount(accountId, new BigDecimal("1000.00"), "TXN-REF-007"))
+                .thenReturn(result);
+
+        mockMvc.perform(post("/accounts/{id}/credit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.newBalance").value(6000.00));
+    }
+
+    @Test
+    void test_creditAccount_shouldReturn400WhenServiceThrows() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("amount", "1000.00");
+        body.put("transferRef", "TXN-REF-008");
+
+        when(transactionService.creditAccount(accountId, new BigDecimal("1000.00"), "TXN-REF-008"))
+                .thenThrow(new RuntimeException("Account not found"));
+
+        mockMvc.perform(post("/accounts/{id}/credit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Account not found"));
+    }
+
+    @Test
+    void test_creditAccount_shouldReturn400WhenAmountNotProvided() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("transferRef", "TXN-REF-009");
+
+        mockMvc.perform(post("/accounts/{id}/credit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void test_creditAccount_shouldReturn400WhenAmountIsNegative() throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("amount", "-200.00");
+        body.put("transferRef", "TXN-REF-010");
+
+        mockMvc.perform(post("/accounts/{id}/credit", accountId).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest());
+    }
+
 }

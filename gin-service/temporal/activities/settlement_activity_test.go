@@ -16,15 +16,22 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
 type mockBankingClient struct {
-	result *client.SettleTransferResponse
-	err    error
+	err error
 }
 
-func (m *mockBankingClient) SettleTransfer(from, to string, amount float64, mode, tpin string) (*client.SettleTransferResponse, error) {
-	return m.result, m.err
+func (m *mockBankingClient) DebitAccount(accountID string, amount float64, transferRef, tpin string) (*client.DebitResult, error) {
+	return &client.DebitResult{}, m.err
 }
 
+func (m *mockBankingClient) CreditAccount(accountID string, amount float64, transferRef string) (*client.CreditResult, error) {
+	return &client.CreditResult{}, m.err
+}
+
+// setupTestDB connects to MongoDB, wires up db.Repo and db.OutboxRepo with
+// unique, isolated collections, and registers a cleanup that drops them.
 func setupTestDB(t *testing.T) {
 	t.Helper()
 
@@ -45,12 +52,18 @@ func setupTestDB(t *testing.T) {
 	col := mongoClient.Database("banking_test").Collection(colName)
 	db.Repo = &db.MongoTransferRepo{Col: col}
 
+	outboxColName := "outbox_" + uuid.New().String()[:8]
+	outboxCol := mongoClient.Database("banking_test").Collection(outboxColName)
+	db.OutboxRepo = &db.MongoOutboxRepo{Col: outboxCol}
+
 	t.Cleanup(func() {
-		col.Drop(context.Background())
-		mongoClient.Disconnect(context.Background())
+		col.Drop(context.Background())       //nolint:errcheck
+		outboxCol.Drop(context.Background()) //nolint:errcheck
+		mongoClient.Disconnect(context.Background()) //nolint:errcheck
 	})
 }
 
+// seedTransfer inserts a transfer into db.Repo and returns it.
 func seedTransfer(t *testing.T, mode, status string) models.Transfer {
 	t.Helper()
 	transfer := models.Transfer{
@@ -67,103 +80,192 @@ func seedTransfer(t *testing.T, mode, status string) models.Transfer {
 	return transfer
 }
 
-func TestSettleTransfer_shouldUpdateStatusToSuccessWhenBankingClientSucceeds(t *testing.T) {
-	setupTestDB(t)
-	transfer := seedTransfer(t, "NEFT", "PENDING")
+// mongoURI returns the configured MONGO_URI or the local default.
+func mongoURI() string {
+	if v := os.Getenv("MONGO_URI"); v != "" {
+		return v
+	}
+	return "mongodb://localhost:27017"
+}
 
-	act := &SettlementActivity{
-		BankingClient: &mockBankingClient{
-			result: &client.SettleTransferResponse{Status: "SUCCESS"},
-		},
+// ─── DebitAccount ─────────────────────────────────────────────────────────────
+
+func TestDebitAccount_shouldReturnDebitResultWhenBankingClientSucceeds(t *testing.T) {
+	setupTestDB(t)
+
+	act := &SettlementActivity{BankingClient: &mockBankingClient{err: nil}}
+	input := DebitInput{
+		AccountID:   uuid.New().String(),
+		Amount:      500.0,
+		TransferRef: uuid.New().String(),
+		Tpin:        "1234",
 	}
 
-	err := act.SettleTransfer(context.Background(), SettlementInput{
-		TransferID:   transfer.ID.String(),
-		FromAccount:  transfer.FromAccount.String(),
-		ToAccount:    transfer.ToAccount.String(),
-		Amount:       transfer.Amount,
-		TransferMode: "NEFT",
-		Tpin:         "1234",
-	})
+	result, err := act.DebitAccount(context.Background(), input)
+
+	assert.NoError(t, err)
+	assert.IsType(t, client.DebitResult{}, result)
+}
+
+func TestDebitAccount_shouldReturnErrorWhenBankingClientFails(t *testing.T) {
+	setupTestDB(t)
+
+	bankErr := errors.New("insufficient funds")
+	act := &SettlementActivity{BankingClient: &mockBankingClient{err: bankErr}}
+	input := DebitInput{
+		AccountID:   uuid.New().String(),
+		Amount:      9999.0,
+		TransferRef: uuid.New().String(),
+		Tpin:        "0000",
+	}
+
+	_, err := act.DebitAccount(context.Background(), input)
+
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "debit failed for account")
+}
+
+func TestDebitAccount_shouldWrapErrorWithAccountAndTransferRef(t *testing.T) {
+	setupTestDB(t)
+
+	accountID := uuid.New().String()
+	transferRef := uuid.New().String()
+	bankErr := errors.New("account frozen")
+	act := &SettlementActivity{BankingClient: &mockBankingClient{err: bankErr}}
+	input := DebitInput{
+		AccountID:   accountID,
+		Amount:      100.0,
+		TransferRef: transferRef,
+		Tpin:        "5678",
+	}
+
+	_, err := act.DebitAccount(context.Background(), input)
+
+	assert.Error(t, err)
+	// The wrapped message must include both the account ID and transfer reference.
+	assert.ErrorContains(t, err, accountID)
+	assert.ErrorContains(t, err, transferRef)
+}
+
+// ─── CreditAccount ────────────────────────────────────────────────────────────
+
+func TestCreditAccount_shouldReturnCreditResultWhenBankingClientSucceeds(t *testing.T) {
+	setupTestDB(t)
+
+	act := &SettlementActivity{BankingClient: &mockBankingClient{err: nil}}
+	input := CreditInput{
+		AccountID:   uuid.New().String(),
+		Amount:      750.0,
+		TransferRef: uuid.New().String(),
+	}
+
+	result, err := act.CreditAccount(context.Background(), input)
+
+	assert.NoError(t, err)
+	assert.IsType(t, client.CreditResult{}, result)
+}
+
+func TestCreditAccount_shouldReturnErrorWhenBankingClientFails(t *testing.T) {
+	setupTestDB(t)
+
+	bankErr := errors.New("account not found")
+	act := &SettlementActivity{BankingClient: &mockBankingClient{err: bankErr}}
+	input := CreditInput{
+		AccountID:   uuid.New().String(),
+		Amount:      200.0,
+		TransferRef: uuid.New().String(),
+	}
+
+	_, err := act.CreditAccount(context.Background(), input)
+
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "credit failed for account")
+}
+
+// ─── UpdateTransferStatus ─────────────────────────────────────────────────────
+
+func TestUpdateTransferStatus_shouldUpdateStatusInMongoDBWhenValidIDProvided(t *testing.T) {
+	setupTestDB(t)
+
+	transfer := seedTransfer(t, "IMPS", "PENDING")
+	act := &SettlementActivity{BankingClient: &mockBankingClient{}}
+
+	err := act.UpdateTransferStatus(context.Background(), transfer.ID.String(), "SUCCESS", "")
 
 	assert.NoError(t, err)
 
-	updated, findErr := db.Repo.FindByID(context.Background(), transfer.ID)
-	assert.NoError(t, findErr)
+	// Verify the status was persisted in MongoDB.
+	updated, fetchErr := db.Repo.FindByID(context.Background(), transfer.ID)
+	assert.NoError(t, fetchErr)
 	assert.Equal(t, "SUCCESS", updated.Status)
 }
 
-func TestSettleTransfer_shouldUpdateStatusToFailedAndReturnErrorWhenBankingClientFails(t *testing.T) {
-	setupTestDB(t)
-	transfer := seedTransfer(t, "RTGS", "PROCESSING")
-
-	act := &SettlementActivity{
-		BankingClient: &mockBankingClient{
-			err: errors.New("spring boot unavailable"),
-		},
-	}
-
-	err := act.SettleTransfer(context.Background(), SettlementInput{
-		TransferID:   transfer.ID.String(),
-		FromAccount:  transfer.FromAccount.String(),
-		ToAccount:    transfer.ToAccount.String(),
-		Amount:       transfer.Amount,
-		TransferMode: "RTGS",
-		Tpin:         "1234",
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "spring boot settlement failed")
-
-	updated, findErr := db.Repo.FindByID(context.Background(), transfer.ID)
-	assert.NoError(t, findErr)
-	assert.Equal(t, "FAILED", updated.Status)
-}
-
-func TestSettleTransfer_shouldReturnErrorImmediatelyWhenTransferIDIsInvalidUUID(t *testing.T) {
+func TestUpdateTransferStatus_shouldReturnErrorWhenTransferIDIsInvalidUUID(t *testing.T) {
 	setupTestDB(t)
 
-	act := &SettlementActivity{
-		BankingClient: &mockBankingClient{
-			result: &client.SettleTransferResponse{Status: "SUCCESS"},
-		},
-	}
+	act := &SettlementActivity{BankingClient: &mockBankingClient{}}
 
-	err := act.SettleTransfer(context.Background(), SettlementInput{
-		TransferID:   "not-a-valid-uuid",
-		FromAccount:  uuid.New().String(),
-		ToAccount:    uuid.New().String(),
-		Amount:       500.0,
-		TransferMode: "NEFT",
-		Tpin:         "1234",
-	})
+	err := act.UpdateTransferStatus(context.Background(), "not-a-uuid", "SUCCESS", "")
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid transfer ID")
+	assert.ErrorContains(t, err, "invalid transfer ID")
 }
 
-func TestSettleTransfer_shouldUpdateStatusToFailedWhenBankingClientReturnsNilResult(t *testing.T) {
+func TestUpdateTransferStatus_shouldUpdateStatusWithFailureReason(t *testing.T) {
 	setupTestDB(t)
+
 	transfer := seedTransfer(t, "NEFT", "PENDING")
+	act := &SettlementActivity{BankingClient: &mockBankingClient{}}
+	reason := "debit failed: insufficient funds"
 
-	act := &SettlementActivity{
-		BankingClient: &mockBankingClient{
-			result: nil,
-			err:    errors.New("unexpected nil"),
-		},
+	err := act.UpdateTransferStatus(context.Background(), transfer.ID.String(), "FAILED", reason)
+
+	assert.NoError(t, err)
+
+	// Confirm the status transition was persisted.
+	updated, fetchErr := db.Repo.FindByID(context.Background(), transfer.ID)
+	assert.NoError(t, fetchErr)
+	assert.Equal(t, "FAILED", updated.Status)
+}
+
+// ─── CleanupOutbox ────────────────────────────────────────────────────────────
+
+func TestCleanupOutbox_shouldReturnNilEvenWhenOutboxEntryDoesNotExist(t *testing.T) {
+	setupTestDB(t)
+
+	act := &SettlementActivity{BankingClient: &mockBankingClient{}}
+
+	// No outbox entry seeded — DeleteByTransferID on a missing document is a
+	// no-op at the MongoDB layer. The activity must not propagate that as an
+	// error and must always return nil.
+	err := act.CleanupOutbox(context.Background(), uuid.New().String())
+
+	assert.NoError(t, err)
+}
+
+func TestCleanupOutbox_shouldReturnNilWhenDeleteSucceeds(t *testing.T) {
+	setupTestDB(t)
+
+	transfer := seedTransfer(t, "RTGS", "PENDING")
+
+	// Insert an outbox entry for the transfer so there is a real document to
+	// delete, giving DeleteByTransferID a matched document to remove.
+	outboxMongoRepo, ok := db.OutboxRepo.(*db.MongoOutboxRepo)
+	if !ok {
+		t.Skip("OutboxRepo is not *MongoOutboxRepo — skipping direct insert")
 	}
 
-	err := act.SettleTransfer(context.Background(), SettlementInput{
-		TransferID:   transfer.ID.String(),
-		FromAccount:  transfer.FromAccount.String(),
-		ToAccount:    transfer.ToAccount.String(),
-		Amount:       transfer.Amount,
-		TransferMode: "NEFT",
-		Tpin:         "1234",
-	})
+	outboxEntry := &models.OutboxEntry{
+		ID:         uuid.New().String(),
+		TransferID: transfer.ID.String(),
+		Status:     "UNPROCESSED",
+	}
+	_, insertErr := outboxMongoRepo.Col.InsertOne(context.Background(), outboxEntry)
+	assert.NoError(t, insertErr)
 
-	assert.Error(t, err)
+	act := &SettlementActivity{BankingClient: &mockBankingClient{}}
 
-	updated, findErr := db.Repo.FindByID(context.Background(), transfer.ID)
-	assert.NoError(t, findErr)
-	assert.Equal(t, "FAILED", updated.Status)
+	err := act.CleanupOutbox(context.Background(), transfer.ID.String())
+
+	assert.NoError(t, err)
 }

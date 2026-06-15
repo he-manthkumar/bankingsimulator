@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TransactionService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">core-banking-service</a> &gt; <a href="index.source.html" class="el_package">com.banking.service</a> &gt; <span class="el_source">TransactionService.java</span></div><h1>TransactionService.java</h1><pre class="source lang-java linenums">package com.banking.service;
 
+import com.banking.dto.CreditResult;
+import com.banking.dto.DebitResult;
 import com.banking.model.Account;
 import com.banking.model.Transaction;
 import com.banking.repository.AccountRepository;
@@ -19,70 +21,69 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
 
-<span class="fc" id="L22">    public TransactionService(TransactionRepository transactionRepository, AccountRepository accountRepository) {</span>
-<span class="fc" id="L23">        this.transactionRepository = transactionRepository;</span>
-<span class="fc" id="L24">        this.accountRepository = accountRepository;</span>
-<span class="fc" id="L25">    }</span>
+<span class="fc" id="L24">    public TransactionService(TransactionRepository transactionRepository, AccountRepository accountRepository) {</span>
+<span class="fc" id="L25">        this.transactionRepository = transactionRepository;</span>
+<span class="fc" id="L26">        this.accountRepository = accountRepository;</span>
+<span class="fc" id="L27">    }</span>
 
-    @Transactional
-    public Transaction settleTransfer(UUID fromId, UUID toId, BigDecimal amount, String transferMode, String tpin) {
-<span class="fc" id="L29">        Account sender = accountRepository.findById(fromId)</span>
-<span class="fc" id="L30">                .orElseThrow(() -&gt; new RuntimeException(&quot;Sender account not found&quot;));</span>
-<span class="fc" id="L31">        Account receiver = accountRepository.findById(toId)</span>
-<span class="fc" id="L32">                .orElseThrow(() -&gt; new RuntimeException(&quot;Receiver account not found&quot;));</span>
-
-<span class="fc bfc" id="L34" title="All 2 branches covered.">        if (!sender.getTpin().equals(tpin)) {</span>
-<span class="fc" id="L35">            return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, &quot;FAILED&quot;));</span>
-        }
-
-<span class="fc bfc" id="L38" title="All 2 branches covered.">        if (sender.getBalance().compareTo(amount) &lt; 0) {</span>
-<span class="fc" id="L39">            return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, &quot;FAILED&quot;));</span>
-        }
-
-<span class="fc" id="L42">        sender.setBalance(sender.getBalance().subtract(amount));</span>
-<span class="fc" id="L43">        receiver.setBalance(receiver.getBalance().add(amount));</span>
-<span class="fc" id="L44">        accountRepository.save(sender);</span>
-<span class="fc" id="L45">        accountRepository.save(receiver);</span>
-
-<span class="fc" id="L47">        return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, &quot;SUCCESS&quot;));</span>
-    }
-
-    private Transaction buildTransaction(UUID fromId, UUID toId, BigDecimal amount, String transferMode,
-            String status) {
-<span class="fc" id="L52">        return Transaction.builder()</span>
-<span class="fc" id="L53">                .fromAccount(fromId)</span>
-<span class="fc" id="L54">                .toAccount(toId)</span>
-<span class="fc" id="L55">                .amount(amount)</span>
-<span class="fc" id="L56">                .transferMode(transferMode)</span>
-<span class="fc" id="L57">                .status(status)</span>
-<span class="fc" id="L58">                .build();</span>
-    }
 
     public Optional&lt;Transaction&gt; getTransaction(UUID id) {
-<span class="fc" id="L62">        return transactionRepository.findById(id);</span>
+<span class="fc" id="L31">        return transactionRepository.findById(id);</span>
     }
 
     public List&lt;Transaction&gt; getAllTransactions() {
-<span class="fc" id="L66">        return transactionRepository.findAll();</span>
+<span class="fc" id="L35">        return transactionRepository.findAll();</span>
     }
 
     public List&lt;Transaction&gt; getAccountTransactions(UUID accountId) {
 
-<span class="fc" id="L71">        List&lt;Transaction&gt; all = transactionRepository.findByFromAccountOrToAccount(accountId, accountId);</span>
+<span class="fc" id="L40">        List&lt;Transaction&gt; all = transactionRepository.findByFromAccountOrToAccount(accountId, accountId);</span>
 
-<span class="fc bfc" id="L73" title="All 4 branches covered.">        return all.stream().filter(txn -&gt; txn.getStatus().equals(&quot;SUCCESS&quot;) || txn.getFromAccount().equals(accountId))</span>
-<span class="fc" id="L74">                .collect(Collectors.toList());</span>
+<span class="fc bfc" id="L42" title="All 4 branches covered.">        return all.stream().filter(txn -&gt; txn.getStatus().equals(&quot;SUCCESS&quot;) || txn.getFromAccount().equals(accountId))</span>
+<span class="fc" id="L43">                .collect(Collectors.toList());</span>
     }
 
     public Transaction saveTransaction(UUID fromId, UUID toId, BigDecimal amount, String transferMode, String status) {
-<span class="fc" id="L78">        Transaction txn = Transaction.builder()</span>
-<span class="fc" id="L79">                .fromAccount(fromId)</span>
-<span class="fc" id="L80">                .toAccount(toId)</span>
-<span class="fc" id="L81">                .amount(amount)</span>
-<span class="fc" id="L82">                .transferMode(transferMode)</span>
-<span class="fc" id="L83">                .status(status)</span>
-<span class="fc" id="L84">                .build();</span>
-<span class="fc" id="L85">        return transactionRepository.save(txn);</span>
+<span class="fc" id="L47">        Transaction txn = Transaction.builder()</span>
+<span class="fc" id="L48">                .fromAccount(fromId)</span>
+<span class="fc" id="L49">                .toAccount(toId)</span>
+<span class="fc" id="L50">                .amount(amount)</span>
+<span class="fc" id="L51">                .transferMode(transferMode)</span>
+<span class="fc" id="L52">                .status(status)</span>
+<span class="fc" id="L53">                .build();</span>
+<span class="fc" id="L54">        return transactionRepository.save(txn);</span>
+    }
+
+    @Transactional
+    public DebitResult debitAccount(UUID accountId, BigDecimal amount, String transferRef, String tpin) {
+<span class="fc" id="L59">        Account sender = accountRepository.findById(accountId)</span>
+<span class="fc" id="L60">                .orElseThrow(() -&gt; new RuntimeException(&quot;Account not found: &quot; + accountId));</span>
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        if (!sender.getTpin().equals(tpin)) {</span>
+<span class="fc" id="L62">            throw new RuntimeException(&quot;invalid tpin for account &quot; + accountId);</span>
+        }
+<span class="fc bfc" id="L64" title="All 2 branches covered.">        if (sender.getBalance().compareTo(amount) &lt; 0) {</span>
+<span class="fc" id="L65">            throw new RuntimeException(&quot;insufficient balance&quot;);</span>
+        }
+<span class="fc" id="L67">        sender.setBalance(sender.getBalance().subtract(amount));</span>
+<span class="fc" id="L68">        accountRepository.save(sender);</span>
+<span class="fc" id="L69">        return DebitResult.builder()</span>
+<span class="fc" id="L70">                .accountId(accountId)</span>
+<span class="fc" id="L71">                .newBalance(sender.getBalance())</span>
+<span class="fc" id="L72">                .transferRef(transferRef)</span>
+<span class="fc" id="L73">                .build();</span>
+    }
+
+    @Transactional
+    public CreditResult creditAccount(UUID accountId, BigDecimal amount, String transferRef) {
+<span class="fc" id="L78">        Account receiver = accountRepository.findById(accountId)</span>
+<span class="fc" id="L79">                .orElseThrow(() -&gt; new RuntimeException(&quot;Account not found: &quot; + accountId));</span>
+<span class="fc" id="L80">        receiver.setBalance(receiver.getBalance().add(amount));</span>
+<span class="fc" id="L81">        accountRepository.save(receiver);</span>
+<span class="fc" id="L82">        return CreditResult.builder()</span>
+<span class="fc" id="L83">                .accountId(accountId)</span>
+<span class="fc" id="L84">                .newBalance(receiver.getBalance())</span>
+<span class="fc" id="L85">                .transferRef(transferRef)</span>
+<span class="fc" id="L86">                .build();</span>
     }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.13.202504020838</span></div></body></html>

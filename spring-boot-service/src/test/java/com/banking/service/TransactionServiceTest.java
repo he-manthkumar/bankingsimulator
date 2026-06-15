@@ -16,9 +16,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.banking.dto.CreditResult;
+import com.banking.dto.DebitResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
@@ -46,160 +49,6 @@ public class TransactionServiceTest
         receiver = Account.builder().id(toId).name("Arigela").balance(new BigDecimal("2000.00")).tpin("5678").build();
 
         mockTransaction = Transaction.builder().id(UUID.randomUUID()).fromAccount(fromId).toAccount(toId).amount(new BigDecimal("1000.00")).transferMode("NEFT").status("SUCCESS").build();
-    }
-
-    @Test
-    void test_settleTransfer_shouldReturnSuccessTransactionWhenValidDetailsProvided() 
-    {
-        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
-
-        when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(argThat(txn -> txn.getFromAccount().equals(fromId) && txn.getToAccount().equals(toId) && txn.getAmount().compareTo(new BigDecimal("1000.00")) == 0 && txn.getTransferMode().equals("NEFT")))).thenReturn(mockTransaction);
-
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234");
-
-        assertThat(result.getStatus()).isEqualTo("SUCCESS");
-
-        verify(accountRepository, times(1)).save(sender);
-
-        verify(accountRepository, times(1)).save(receiver);
-
-        verify(transactionRepository, times(1)).save(argThat(txn -> txn.getFromAccount().equals(fromId) && txn.getToAccount().equals(toId) && txn.getAmount().compareTo(new BigDecimal("1000.00")) == 0 && txn.getTransferMode().equals("NEFT")));
-    }
-
-    @Test
-    void test_settleTransfer_shouldDeductSenderBalanceWhenTransferIsSuccessful() 
-    {
-        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
-
-        when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS")))).thenReturn(mockTransaction);
-
-        transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234");
-
-        assertThat(sender.getBalance()).isEqualByComparingTo("4000.00");
-    }
-
-    @Test
-    void test_settleTransfer_shouldCreditReceiverBalanceWhenTransferIsSuccessful() 
-    {
-        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
-
-        when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS")))).thenReturn(mockTransaction);
-
-        transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234");
-
-        assertThat(receiver.getBalance()).isEqualByComparingTo("3000.00");
-    }
-
-    @Test
-    void test_settleTransfer_shouldReturnFailedTransactionWhenTpinIsIncorrect() 
-    {
-        Transaction failedTxn = Transaction.builder().id(UUID.randomUUID()).fromAccount(fromId).toAccount(toId).amount(new BigDecimal("1000.00")).transferMode("NEFT").status("FAILED").build();
-
-        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
-
-        when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("FAILED")))).thenReturn(failedTxn);
-
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "9999");
-
-        assertThat(result.getStatus()).isEqualTo("FAILED");
-
-        verify(accountRepository, never()).save(sender);
-
-        verify(accountRepository, never()).save(receiver);
-    }
-
-    @Test
-    void test_settleTransfer_shouldReturnFailedTransactionWhenTpinIsEmpty() 
-    {
-        Transaction failedTxn = Transaction.builder().id(UUID.randomUUID()).fromAccount(fromId).toAccount(toId).amount(new BigDecimal("500.00")).transferMode("UPI").status("FAILED").build();
-
-        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
-
-        when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("FAILED")))).thenReturn(failedTxn);
-
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("500.00"), "UPI", "");
-
-        assertThat(result.getStatus()).isEqualTo("FAILED");
-
-        verify(accountRepository, never()).save(sender);
-    }
-
-    @Test
-    void test_settleTransfer_shouldReturnFailedTransactionWhenInsufficientBalance() 
-    {
-        Transaction failedTxn = Transaction.builder().id(UUID.randomUUID()).fromAccount(fromId).toAccount(toId).amount(new BigDecimal("9999.00")).transferMode("IMPS").status("FAILED").build();
-
-        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
-
-        when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
-
-        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("FAILED")))).thenReturn(failedTxn);
-
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("9999.00"), "IMPS", "1234");
-
-        assertThat(result.getStatus()).isEqualTo("FAILED");
-
-        verify(accountRepository, never()).save(sender);
-
-        verify(accountRepository, never()).save(receiver);
-    }
-
-    @Test
-    void test_settleTransfer_shouldReturnSuccessWhenAmountEqualsExactBalance() 
-    {
-        Transaction exactBalanceTxn = Transaction.builder()
-            .id(UUID.randomUUID())
-            .fromAccount(fromId)
-            .toAccount(toId)
-            .amount(new BigDecimal("5000.00")) 
-            .transferMode("NEFT")
-            .status("SUCCESS")
-            .build();
-
-        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
-        when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
-        when(transactionRepository.save(argThat(txn -> txn.getStatus().equals("SUCCESS"))))
-            .thenReturn(exactBalanceTxn);  
-
-        Transaction result = transactionService.settleTransfer(fromId, toId, new BigDecimal("5000.00"), "NEFT", "1234");
-
-        assertThat(sender.getBalance()).isEqualByComparingTo("0.00");
-        assertThat(result.getAmount()).isEqualByComparingTo("5000.00");
-        assertThat(result.getStatus()).isEqualTo("SUCCESS");
-
-        verify(transactionRepository, times(1)).save(argThat(txn -> txn.getStatus().equals("SUCCESS")));
-    }
-
-    @Test
-    void test_settleTransfer_shouldThrowExceptionWhenSenderAccountNotFound() 
-    {
-        when(accountRepository.findById(fromId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234")).isInstanceOf(RuntimeException.class).hasMessage("Sender account not found");
-
-        verify(transactionRepository, never()).save(argThat(txn -> true));
-    }
-
-    @Test
-    void test_settleTransfer_shouldThrowExceptionWhenReceiverAccountNotFound() 
-    {
-        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
-
-        when(accountRepository.findById(toId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> transactionService.settleTransfer(fromId, toId, new BigDecimal("1000.00"), "NEFT", "1234")).isInstanceOf(RuntimeException.class).hasMessage("Receiver account not found");
-
-        verify(transactionRepository, never()).save(argThat(txn -> true));
     }
 
     @Test
@@ -368,5 +217,112 @@ public class TransactionServiceTest
         verify(transactionRepository, times(1)).save(argThat(txn -> txn.getFromAccount().equals(fromId) && txn.getToAccount().equals(toId) && txn.getAmount().compareTo(new BigDecimal("1000.00")) == 0 && txn.getTransferMode().equals("NEFT") && txn.getStatus().equals("PENDING")));
 
         verifyNoMoreInteractions(transactionRepository);
+    }
+    @Test
+    void test_debitAccount_shouldReturnDebitResultWhenValidRequest()
+    {
+        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
+
+        DebitResult result = transactionService.debitAccount(fromId, new BigDecimal("1000.00"), "TXN-REF-001", "1234");
+
+        assertThat(result.getAccountId()).isEqualTo(fromId);
+        assertThat(result.getNewBalance()).isEqualByComparingTo("4000.00");
+        assertThat(result.getTransferRef()).isEqualTo("TXN-REF-001");
+    }
+
+    @Test
+    void test_debitAccount_shouldPersistUpdatedBalanceWhenValidRequest()
+    {
+        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
+
+        transactionService.debitAccount(fromId, new BigDecimal("1000.00"), "TXN-REF-001", "1234");
+
+        verify(accountRepository, times(1)).save(argThat(acc -> acc.getId().equals(fromId) && acc.getBalance().compareTo(new BigDecimal("4000.00")) == 0));
+    }
+
+    @Test
+    void test_debitAccount_shouldAllowDebitWhenAmountEqualsBalance()
+    {
+        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
+
+        DebitResult result = transactionService.debitAccount(fromId, new BigDecimal("5000.00"), "TXN-REF-002", "1234");
+
+        assertThat(result.getNewBalance()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void test_debitAccount_shouldThrowWhenAccountNotFound()
+    {
+        UUID unknownId = UUID.randomUUID();
+
+        when(accountRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> transactionService.debitAccount(unknownId, new BigDecimal("100.00"), "TXN-REF-003", "1234"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Account not found");
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void test_debitAccount_shouldThrowWhenTpinIsIncorrect()
+    {
+        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
+
+        assertThatThrownBy(() -> transactionService.debitAccount(fromId, new BigDecimal("100.00"), "TXN-REF-004", "0000"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("invalid tpin");
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void test_debitAccount_shouldThrowWhenBalanceIsInsufficient()
+    {
+        when(accountRepository.findById(fromId)).thenReturn(Optional.of(sender));
+
+        assertThatThrownBy(() -> transactionService.debitAccount(fromId, new BigDecimal("10000.00"), "TXN-REF-005", "1234"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("insufficient balance");
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    // ---------- creditAccount ----------
+
+    @Test
+    void test_creditAccount_shouldReturnCreditResultWhenValidRequest()
+    {
+        when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
+
+        CreditResult result = transactionService.creditAccount(toId, new BigDecimal("500.00"), "TXN-REF-006");
+
+        assertThat(result.getAccountId()).isEqualTo(toId);
+        assertThat(result.getNewBalance()).isEqualByComparingTo("2500.00");
+        assertThat(result.getTransferRef()).isEqualTo("TXN-REF-006");
+    }
+
+    @Test
+    void test_creditAccount_shouldPersistUpdatedBalanceWhenValidRequest()
+    {
+        when(accountRepository.findById(toId)).thenReturn(Optional.of(receiver));
+
+        transactionService.creditAccount(toId, new BigDecimal("500.00"), "TXN-REF-006");
+
+        verify(accountRepository, times(1)).save(argThat(acc -> acc.getId().equals(toId) && acc.getBalance().compareTo(new BigDecimal("2500.00")) == 0));
+    }
+
+    @Test
+    void test_creditAccount_shouldThrowWhenAccountNotFound()
+    {
+        UUID unknownId = UUID.randomUUID();
+
+        when(accountRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> transactionService.creditAccount(unknownId, new BigDecimal("500.00"), "TXN-REF-007"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Account not found");
+
+        verify(accountRepository, never()).save(any());
     }
 }

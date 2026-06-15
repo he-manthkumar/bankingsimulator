@@ -1,20 +1,20 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
 
-	"banking/gin-service/client"
 	"banking/gin-service/db"
 	"banking/gin-service/models"
 	temporalsetup "banking/gin-service/temporal"
+	"banking/gin-service/temporal/workflows"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/mongo"
 	temporalclient "go.temporal.io/sdk/client"
 )
 
@@ -29,10 +29,10 @@ type TransferRequest struct {
 }
 
 func ProcessTransfer(c *gin.Context) {
-	ProcessTransferWithClient(c, client.NewCoreBankingClient())
+	ProcessTransferInternal(c)
 }
 
-func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClient) {
+func ProcessTransferInternal(c *gin.Context) {
 	var req TransferRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -51,60 +51,74 @@ func ProcessTransferWithClient(c *gin.Context, bankingClient client.BankingClien
 	}
 
 	transfer := models.Transfer{
+		ID:           uuid.New(),
 		FromAccount:  fromID,
 		ToAccount:    toID,
 		Amount:       req.Amount,
 		TransferMode: req.TransferMode,
-		Status:       getInitialStatus(req.TransferMode),
+		Status:       "PENDING",
+		CreatedAt:    time.Now(),
+	}
+
+	outboxEntry := models.OutboxEntry{
+		ID:            uuid.New().String(),
+		TransferID:    transfer.ID.String(),
+		CorrelationID: "settlement-" + transfer.ID.String(),
+		Action:        "SETTLE",
+		Status:        "UNPROCESSED",
+		Payload: models.OutboxPayload{
+			FromAccount:  transfer.FromAccount.String(),
+			ToAccount:    transfer.ToAccount.String(),
+			Amount:       transfer.Amount,
+			TransferMode: transfer.TransferMode,
+		},
+		CreatedAt: time.Now(),
+		Attempts:  0,
 	}
 
 	ctx := c.Request.Context()
-	if err := db.Repo.Create(ctx, &transfer); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	session, err := db.MongoClient.StartSession()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start db session"})
+		return
+	}
+	defer session.EndSession(ctx)
+
+	_, txErr := session.WithTransaction(ctx, func(sessCtx mongo.SessionContext) (interface{}, error) {
+		if err := db.Repo.CreateWithSession(sessCtx, session, &transfer); err != nil {
+			return nil, fmt.Errorf("failed to create transfer: %w", err)
+		}
+		if err := db.OutboxRepo.CreateWithSession(sessCtx, session, &outboxEntry); err != nil {
+			return nil, fmt.Errorf("failed to create outbox entry: %w", err)
+		}
+		return nil, nil
+	})
+
+	if txErr != nil {
+		log.Printf("ProcessTransfer: transaction failed for %s transfer: %v", req.TransferMode, txErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to persist transfer"})
 		return
 	}
 
-	if req.TransferMode == "IMPS" {
-		result, err := bankingClient.SettleTransfer(
+	if TemporalClient != nil {
+		temporalsetup.StartSettlementWorkflow(
+			TemporalClient,
+			transfer.ID.String(),
 			transfer.FromAccount.String(),
 			transfer.ToAccount.String(),
 			transfer.Amount,
 			transfer.TransferMode,
 			req.Tpin,
 		)
-		if err != nil {
-			log.Printf("Failed to settle IMPS transfer: %v", err)
-			db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
-			transfer.Status = "FAILED"
-		} else {
-			db.Repo.UpdateStatus(context.Background(), transfer.ID, result.Status)
-			transfer.Status = result.Status
-		}
-		c.JSON(http.StatusAccepted, gin.H{
-			"message":  fmt.Sprintf("%s transfer completed", req.TransferMode),
-			"transfer": transfer,
-		})
 	} else {
-		if TemporalClient != nil {
-			temporalsetup.StartSettlementWorkflow(
-				TemporalClient,
-				transfer.ID.String(),
-				transfer.FromAccount.String(),
-				transfer.ToAccount.String(),
-				transfer.Amount,
-				transfer.TransferMode,
-				req.Tpin,
-			)
-		} else {
-			log.Printf("Warning: Temporal not connected — using goroutine fallback for %s transfer %s",
-				req.TransferMode, transfer.ID)
-			go simulateSettlement(transfer, bankingClient, req.Tpin)
-		}
-		c.JSON(http.StatusAccepted, gin.H{
-			"message":  fmt.Sprintf("%s transfer initiated", req.TransferMode),
-			"transfer": transfer,
-		})
+		log.Printf("Warning: Temporal not connected — %s transfer %s persisted but no workflow started",
+			req.TransferMode, transfer.ID)
 	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message":  fmt.Sprintf("%s transfer initiated", req.TransferMode),
+		"transfer": transfer,
+	})
 }
 
 func GetTransferStatus(c *gin.Context) {
@@ -112,6 +126,18 @@ func GetTransferStatus(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid transfer ID"})
 		return
+	}
+
+	if TemporalClient != nil {
+		workflowID := "settlement-" + id.String()
+		resp, queryErr := TemporalClient.QueryWorkflow(c.Request.Context(), workflowID, "", "getStatus")
+		if queryErr == nil {
+			var state workflows.WorkflowState
+			if decodeErr := resp.Get(&state); decodeErr == nil {
+				c.JSON(http.StatusOK, state)
+				return
+			}
+		}
 	}
 
 	transfer, err := db.Repo.FindByID(c.Request.Context(), id)
@@ -123,8 +149,41 @@ func GetTransferStatus(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, transfer)
+}
+
+func CancelTransfer(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid transfer ID"})
+		return
+	}
+
+	if TemporalClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "workflow engine not available"})
+		return
+	}
+
+	workflowID := "settlement-" + id.String()
+	handle, err := TemporalClient.UpdateWorkflow(c.Request.Context(),
+		temporalclient.UpdateWorkflowOptions{
+			WorkflowID:   workflowID,
+			UpdateName:   "requestCancellation",
+			WaitForStage: temporalclient.WorkflowUpdateStageCompleted,
+		},
+	)
+	if err != nil {
+		log.Printf("CancelTransfer: failed to send update to workflow %s: %v", workflowID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reach workflow"})
+		return
+	}
+
+	if updateErr := handle.Get(c.Request.Context(), nil); updateErr != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": updateErr.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "cancellation confirmed"})
 }
 
 func GetAllTransfers(c *gin.Context) {
@@ -134,47 +193,4 @@ func GetAllTransfers(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, transfers)
-}
-
-func getInitialStatus(mode string) string {
-	switch mode {
-	case "IMPS":
-		return "SUCCESS"
-	case "NEFT":
-		return "PENDING"
-	case "RTGS":
-		return "PROCESSING"
-	default:
-		return "PENDING"
-	}
-}
-
-func simulateSettlement(transfer models.Transfer, bankingClient client.BankingClient, tpin string) {
-	switch transfer.TransferMode {
-	case "NEFT":
-		time.Sleep(30 * time.Second)
-	case "RTGS":
-		time.Sleep(15 * time.Second)
-	}
-
-	result, err := bankingClient.SettleTransfer(
-		transfer.FromAccount.String(),
-		transfer.ToAccount.String(),
-		transfer.Amount,
-		transfer.TransferMode,
-		tpin,
-	)
-	if err != nil {
-		log.Printf("Failed to notify Spring Boot: %v", err)
-		db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
-		log.Printf("%s transfer %s marked as FAILED", transfer.TransferMode, transfer.ID)
-		return
-	}
-	if result == nil {
-    log.Printf("Unexpected nil result for %s transfer %s", transfer.TransferMode, transfer.ID)
-    db.Repo.UpdateStatus(context.Background(), transfer.ID, "FAILED")
-    return
-	}
-	db.Repo.UpdateStatus(context.Background(), transfer.ID, result.Status)
-	log.Printf("%s transfer %s settled with status: %s", transfer.TransferMode, transfer.ID, result.Status)
 }

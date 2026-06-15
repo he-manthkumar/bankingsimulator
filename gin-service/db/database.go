@@ -15,12 +15,16 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+var MongoClient *mongo.Client
+
 var ErrNotFound = errors.New("transfer not found")
 
 type TransferRepository interface {
 	Create(ctx context.Context, t *models.Transfer) error
+	CreateWithSession(ctx context.Context, session mongo.Session, t *models.Transfer) error
 	FindByID(ctx context.Context, id uuid.UUID) (*models.Transfer, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
+	UpdateStatusWithReason(ctx context.Context, id uuid.UUID, status, reason string) error
 	FindAll(ctx context.Context) ([]models.Transfer, error)
 }
 
@@ -75,6 +79,17 @@ func (r *MongoTransferRepo) Create(ctx context.Context, t *models.Transfer) erro
 	return err
 }
 
+func (r *MongoTransferRepo) CreateWithSession(ctx context.Context, session mongo.Session, t *models.Transfer) error {
+	if t.ID == uuid.Nil {
+		t.ID = uuid.New()
+	}
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = time.Now()
+	}
+	_, err := r.Col.InsertOne(mongo.NewSessionContext(ctx, session), toMongo(t))
+	return err
+}
+
 func (r *MongoTransferRepo) FindByID(ctx context.Context, id uuid.UUID) (*models.Transfer, error) {
 	var m mongoTransfer
 	err := r.Col.FindOne(ctx, bson.M{"_id": id.String()}).Decode(&m)
@@ -92,6 +107,19 @@ func (r *MongoTransferRepo) UpdateStatus(ctx context.Context, id uuid.UUID, stat
 	_, err := r.Col.UpdateOne(ctx,
 		bson.M{"_id": id.String()},
 		bson.M{"$set": bson.M{"status": status}},
+	)
+	return err
+}
+
+
+func (r *MongoTransferRepo) UpdateStatusWithReason(ctx context.Context, id uuid.UUID, status, reason string) error {
+	update := bson.M{"status": status}
+	if reason != "" {
+		update["failure_reason"] = reason
+	}
+	_, err := r.Col.UpdateOne(ctx,
+		bson.M{"_id": id.String()},
+		bson.M{"$set": update},
 	)
 	return err
 }
@@ -129,8 +157,10 @@ func Connect() {
 		log.Fatal("MongoDB ping failed:", err)
 	}
 
-	col := client.Database(dbName).Collection("transfers")
-	Repo = &MongoTransferRepo{Col: col}
+	MongoClient = client
+
+	Repo = &MongoTransferRepo{Col: client.Database(dbName).Collection("transfers")}
+	OutboxRepo = &MongoOutboxRepo{Col: client.Database(dbName).Collection("outbox")}
 	log.Printf("Connected to MongoDB at %s (db=%s)", uri, dbName)
 }
 

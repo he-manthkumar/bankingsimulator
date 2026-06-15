@@ -23,9 +23,10 @@ func StartWorker(tc temporalclient.Client) {
 		BankingClient: client.NewCoreBankingClient(),
 	}
 
-	w := newWorker(tc, TaskQueue, worker.Options{}) 
+	w := newWorker(tc, TaskQueue, worker.Options{})
 	w.RegisterWorkflow(workflows.SettlementWorkflow)
-	w.RegisterActivity(act) 
+	w.RegisterActivity(act)
+
 	if err := w.Start(); err != nil {
 		log.Fatal("Temporal: failed to start worker:", err)
 	}
@@ -41,8 +42,7 @@ func StartSettlementWorkflow(
 	_, err := tc.ExecuteWorkflow(
 		context.Background(),
 		temporalclient.StartWorkflowOptions{
-			ID:        "settlement-" + transferID, 
-			
+			ID:        "settlement-" + transferID,
 			TaskQueue: TaskQueue,
 		},
 		workflows.SettlementWorkflow,

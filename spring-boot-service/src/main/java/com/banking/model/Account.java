@@ -27,4 +27,5 @@ public class Account
     @JsonIgnore
     @Column(nullable = false, length = 6) private String tpin;
     @CreationTimestamp @Column(name = "created_at", updatable = false) private LocalDateTime createdAt;
+    @Version private Long version;
 }

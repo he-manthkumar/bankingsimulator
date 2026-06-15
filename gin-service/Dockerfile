@@ -9,6 +9,7 @@ COPY client/ ./client/
 COPY db/ ./db/
 COPY handlers/ ./handlers/
 COPY models/ ./models/
+COPY outbox/ ./outbox/
 COPY temporal/ ./temporal/
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/gin-service .

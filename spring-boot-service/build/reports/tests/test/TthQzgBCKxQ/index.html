@@ -44,7 +44,7 @@
 <tr>
 <td>
 <div class="infoBox">
-<div class="counter">11</div>
+<div class="counter">7</div>
 <p>tests</p>
 </div>
 </td>
@@ -62,7 +62,7 @@
 </td>
 <td>
 <div class="infoBox duration">
-<div class="counter">0.299s</div>
+<div class="counter">0.411s</div>
 <p>duration</p>
 </div>
 </td>
@@ -97,7 +97,7 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.005s</td>
+<td>0.016s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -106,7 +106,7 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.006s</td>
+<td>0.004s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -115,7 +115,7 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.005s</td>
+<td>0.008s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -133,7 +133,7 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.007s</td>
+<td>0.005s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -142,7 +142,7 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.005s</td>
+<td>0.004s</td>
 <td class="success">100%</td>
 </tr>
 <tr>
@@ -151,43 +151,7 @@
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0.007s</td>
-<td class="success">100%</td>
-</tr>
-<tr>
-<td class="success">test_settleTransfer_shouldReturnBadRequestWhenTpinIsBlank()</td>
-<td class="path" hidden="">test_settleTransfer_shouldReturnBadRequestWhenTpinIsBlank()</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0.020s</td>
-<td class="success">100%</td>
-</tr>
-<tr>
-<td class="success">test_settleTransfer_shouldReturnSuccessWhenOnlyRequiredFieldsProvided()</td>
-<td class="path" hidden="">test_settleTransfer_shouldReturnSuccessWhenOnlyRequiredFieldsProvided()</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0.018s</td>
-<td class="success">100%</td>
-</tr>
-<tr>
-<td class="success">test_settleTransfer_shouldReturnTransactionWhenAllFieldsProvided()</td>
-<td class="path" hidden="">test_settleTransfer_shouldReturnTransactionWhenAllFieldsProvided()</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0.006s</td>
-<td class="success">100%</td>
-</tr>
-<tr>
-<td class="success">test_settleTransfer_shouldReturnTransactionWithEmptyTpinWhenTpinNotProvided()</td>
-<td class="path" hidden="">test_settleTransfer_shouldReturnTransactionWithEmptyTpinWhenTpinNotProvided()</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0.004s</td>
+<td>0.011s</td>
 <td class="success">100%</td>
 </tr>
 </table>
@@ -196,8 +160,8 @@
 <div class="tab">
 <h2>standard output</h2>
 <span class="code">
-<pre id="root-0-test-stdout-com.banking.controller.TransactionControllerTest">2026-06-01T11:03:37.775+05:30  INFO 29324 --- [    Test worker] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.banking.controller.TransactionControllerTest]: TransactionControllerTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-2026-06-01T11:03:37.784+05:30  INFO 29324 --- [    Test worker] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.banking.CoreBankingApplication for test class com.banking.controller.TransactionControllerTest
+<pre id="root-0-test-stdout-com.banking.controller.TransactionControllerTest">2026-06-14T22:52:47.907+05:30  INFO 12568 --- [    Test worker] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.banking.controller.TransactionControllerTest]: TransactionControllerTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-06-14T22:52:47.914+05:30  INFO 12568 --- [    Test worker] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.banking.CoreBankingApplication for test class com.banking.controller.TransactionControllerTest
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -208,13 +172,13 @@
 
  :: Spring Boot ::                (v3.4.1)
 
-2026-06-01T11:03:37.803+05:30  INFO 29324 --- [    Test worker] c.b.c.TransactionControllerTest          : Starting TransactionControllerTest using Java 24.0.1 with PID 29324 (started by Hemanth Kumar in D:\InternProject - Likith\banking-simulator-main\spring-boot-service)
-2026-06-01T11:03:37.804+05:30 DEBUG 29324 --- [    Test worker] c.b.c.TransactionControllerTest          : Running with Spring Boot v3.4.1, Spring v6.2.1
-2026-06-01T11:03:37.804+05:30  INFO 29324 --- [    Test worker] c.b.c.TransactionControllerTest          : No active profile set, falling back to 1 default profile: &quot;default&quot;
-2026-06-01T11:03:37.969+05:30  INFO 29324 --- [    Test worker] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
-2026-06-01T11:03:37.969+05:30  INFO 29324 --- [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
-2026-06-01T11:03:37.969+05:30  INFO 29324 --- [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
-2026-06-01T11:03:37.973+05:30  INFO 29324 --- [    Test worker] c.b.c.TransactionControllerTest          : Started TransactionControllerTest in 0.186 seconds (process running for 8.15)
+2026-06-14T22:52:47.935+05:30  INFO 12568 --- [    Test worker] c.b.c.TransactionControllerTest          : Starting TransactionControllerTest using Java 24.0.1 with PID 12568 (started by Hemanth Kumar in D:\InternProject - Likith\banking-simulator-main\spring-boot-service)
+2026-06-14T22:52:47.936+05:30 DEBUG 12568 --- [    Test worker] c.b.c.TransactionControllerTest          : Running with Spring Boot v3.4.1, Spring v6.2.1
+2026-06-14T22:52:47.936+05:30  INFO 12568 --- [    Test worker] c.b.c.TransactionControllerTest          : No active profile set, falling back to 1 default profile: &quot;default&quot;
+2026-06-14T22:52:48.253+05:30  INFO 12568 --- [    Test worker] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-06-14T22:52:48.253+05:30  INFO 12568 --- [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-06-14T22:52:48.254+05:30  INFO 12568 --- [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 1 ms
+2026-06-14T22:52:48.257+05:30  INFO 12568 --- [    Test worker] c.b.c.TransactionControllerTest          : Started TransactionControllerTest in 0.341 seconds (process running for 7.693)
 </pre>
 <button class="clipboard-copy-btn" aria-label="Copy to clipboard" data-copy-element-id="root-0-test-stdout-com.banking.controller.TransactionControllerTest">Copy</button>
 </span>
@@ -229,7 +193,7 @@
 <input id="line-wrapping-toggle" type="checkbox" autocomplete="off"/>
 </label>
 </div>Generated by 
-<a href="https://www.gradle.org">Gradle 9.5.1</a> at 1 Jun 2026, 11:03:38 am</p>
+<a href="https://www.gradle.org">Gradle 9.5.1</a> at 14 Jun 2026, 10:52:48 pm</p>
 </div>
 </div>
 </body>

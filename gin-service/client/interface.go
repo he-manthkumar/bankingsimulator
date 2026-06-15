@@ -1,5 +1,6 @@
 package client
 
 type BankingClient interface {
-	SettleTransfer(fromAccount, toAccount string, amount float64, transferMode, tpin string) (*SettleTransferResponse, error)
+	DebitAccount(accountID string, amount float64, transferRef, tpin string) (*DebitResult, error)
+	CreditAccount(accountID string, amount float64, transferRef string) (*CreditResult, error)
 }

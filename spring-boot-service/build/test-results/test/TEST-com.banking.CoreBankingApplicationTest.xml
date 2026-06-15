@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.banking.CoreBankingApplicationTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-06-01T05:33:31.202Z" hostname="HEMANTHKUMAR" time="5.39">
+<testsuite name="com.banking.CoreBankingApplicationTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-06-14T17:22:41.619Z" hostname="HEMANTHKUMAR" time="5.111">
   <properties/>
-  <testcase name="TestContextLoads()" classname="com.banking.CoreBankingApplicationTest" time="0.294"/>
-  <system-out><![CDATA[11:03:31.446 [Test worker] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.banking.CoreBankingApplicationTest]: CoreBankingApplicationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-11:03:31.586 [Test worker] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.banking.CoreBankingApplication for test class com.banking.CoreBankingApplicationTest
+  <testcase name="TestContextLoads()" classname="com.banking.CoreBankingApplicationTest" time="0.327"/>
+  <system-out><![CDATA[22:52:41.830 [Test worker] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.banking.CoreBankingApplicationTest]: CoreBankingApplicationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+22:52:41.964 [Test worker] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.banking.CoreBankingApplication for test class com.banking.CoreBankingApplicationTest
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -14,21 +14,21 @@
 
  :: Spring Boot ::                (v3.4.1)
 
-2026-06-01T11:03:32.181+05:30  INFO 29324 --- [    Test worker] com.banking.CoreBankingApplicationTest   : Starting CoreBankingApplicationTest using Java 24.0.1 with PID 29324 (started by Hemanth Kumar in D:\InternProject - Likith\banking-simulator-main\spring-boot-service)
-2026-06-01T11:03:32.182+05:30 DEBUG 29324 --- [    Test worker] com.banking.CoreBankingApplicationTest   : Running with Spring Boot v3.4.1, Spring v6.2.1
-2026-06-01T11:03:32.182+05:30  INFO 29324 --- [    Test worker] com.banking.CoreBankingApplicationTest   : The following 1 profile is active: "test"
-2026-06-01T11:03:33.065+05:30  INFO 29324 --- [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-06-01T11:03:33.139+05:30  INFO 29324 --- [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 61 ms. Found 2 JPA repository interfaces.
-2026-06-01T11:03:33.613+05:30  INFO 29324 --- [    Test worker] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-06-01T11:03:33.696+05:30  INFO 29324 --- [    Test worker] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.4.Final
-2026-06-01T11:03:33.774+05:30  INFO 29324 --- [    Test worker] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
-2026-06-01T11:03:34.115+05:30  INFO 29324 --- [    Test worker] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-06-01T11:03:34.144+05:30  INFO 29324 --- [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-06-01T11:03:34.398+05:30  INFO 29324 --- [    Test worker] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:testdb user=SA
-2026-06-01T11:03:34.401+05:30  INFO 29324 --- [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-06-01T11:03:34.430+05:30  WARN 29324 --- [    Test worker] org.hibernate.dialect.Dialect            : HHH000511: The 2.3.232 version for [org.hibernate.dialect.PostgreSQLDialect] is no longer supported, hence certain features may not work properly. The minimum supported version is 12.0.0. Check the community dialects project for available legacy versions.
-2026-06-01T11:03:34.436+05:30  WARN 29324 --- [    Test worker] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-06-01T11:03:34.458+05:30  INFO 29324 --- [    Test worker] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+2026-06-14T22:52:42.492+05:30  INFO 12568 --- [    Test worker] com.banking.CoreBankingApplicationTest   : Starting CoreBankingApplicationTest using Java 24.0.1 with PID 12568 (started by Hemanth Kumar in D:\InternProject - Likith\banking-simulator-main\spring-boot-service)
+2026-06-14T22:52:42.493+05:30 DEBUG 12568 --- [    Test worker] com.banking.CoreBankingApplicationTest   : Running with Spring Boot v3.4.1, Spring v6.2.1
+2026-06-14T22:52:42.493+05:30  INFO 12568 --- [    Test worker] com.banking.CoreBankingApplicationTest   : The following 1 profile is active: "test"
+2026-06-14T22:52:43.236+05:30  INFO 12568 --- [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-06-14T22:52:43.313+05:30  INFO 12568 --- [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 62 ms. Found 2 JPA repository interfaces.
+2026-06-14T22:52:43.752+05:30  INFO 12568 --- [    Test worker] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-06-14T22:52:43.835+05:30  INFO 12568 --- [    Test worker] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.4.Final
+2026-06-14T22:52:43.881+05:30  INFO 12568 --- [    Test worker] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-06-14T22:52:44.206+05:30  INFO 12568 --- [    Test worker] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-06-14T22:52:44.240+05:30  INFO 12568 --- [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-14T22:52:44.511+05:30  INFO 12568 --- [    Test worker] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:testdb user=SA
+2026-06-14T22:52:44.514+05:30  INFO 12568 --- [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-14T22:52:44.548+05:30  WARN 12568 --- [    Test worker] org.hibernate.dialect.Dialect            : HHH000511: The 2.3.232 version for [org.hibernate.dialect.PostgreSQLDialect] is no longer supported, hence certain features may not work properly. The minimum supported version is 12.0.0. Check the community dialects project for available legacy versions.
+2026-06-14T22:52:44.555+05:30  WARN 12568 --- [    Test worker] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-06-14T22:52:44.578+05:30  INFO 12568 --- [    Test worker] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
 	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
 	Database driver: undefined/unknown
 	Database version: 2.3.232
@@ -36,12 +36,12 @@
 	Isolation level: undefined/unknown
 	Minimum pool size: undefined/unknown
 	Maximum pool size: undefined/unknown
-2026-06-01T11:03:35.316+05:30  INFO 29324 --- [    Test worker] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-06-01T11:03:35.330+05:30 DEBUG 29324 --- [    Test worker] org.hibernate.SQL                        : 
+2026-06-14T22:52:45.440+05:30  INFO 12568 --- [    Test worker] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-06-14T22:52:45.457+05:30 DEBUG 12568 --- [    Test worker] org.hibernate.SQL                        : 
     set client_min_messages = WARNING
 Hibernate: 
     set client_min_messages = WARNING
-2026-06-01T11:03:35.336+05:30  WARN 29324 --- [    Test worker] o.h.t.s.i.ExceptionHandlerLoggedImpl     : GenerationTarget encountered exception accepting command : Error executing DDL "
+2026-06-14T22:52:45.462+05:30  WARN 12568 --- [    Test worker] o.h.t.s.i.ExceptionHandlerLoggedImpl     : GenerationTarget encountered exception accepting command : Error executing DDL "
     set client_min_messages = WARNING" via JDBC [Syntax error in SQL statement "\000d\000a    set [*]client_min_messages = WARNING"; expected "@, AUTOCOMMIT, EXCLUSIVE, IGNORECASE, PASSWORD, SALT, MODE, DATABASE, COLLATION, CLUSTER, DATABASE_EVENT_LISTENER, ALLOW_LITERALS, DEFAULT_TABLE_TYPE, SCHEMA, CATALOG, SCHEMA_SEARCH_PATH, JAVA_OBJECT_SERIALIZER, IGNORE_CATALOGS, SESSION, TRANSACTION, TIME, NON_KEYWORDS, DEFAULT_NULL_ORDERING";]
 
 org.hibernate.tool.schema.spi.CommandAcceptanceException: Error executing DDL "
@@ -198,19 +198,20 @@ Caused by: org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statemen
 	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80) ~[hibernate-core-6.6.4.Final.jar:6.6.4.Final]
 	... 129 common frames omitted
 
-2026-06-01T11:03:35.347+05:30 DEBUG 29324 --- [    Test worker] org.hibernate.SQL                        : 
+2026-06-14T22:52:45.470+05:30 DEBUG 12568 --- [    Test worker] org.hibernate.SQL                        : 
     drop table if exists accounts cascade
 Hibernate: 
     drop table if exists accounts cascade
-2026-06-01T11:03:35.348+05:30 DEBUG 29324 --- [    Test worker] org.hibernate.SQL                        : 
+2026-06-14T22:52:45.472+05:30 DEBUG 12568 --- [    Test worker] org.hibernate.SQL                        : 
     drop table if exists transactions cascade
 Hibernate: 
     drop table if exists transactions cascade
-2026-06-01T11:03:35.354+05:30 DEBUG 29324 --- [    Test worker] org.hibernate.SQL                        : 
+2026-06-14T22:52:45.478+05:30 DEBUG 12568 --- [    Test worker] org.hibernate.SQL                        : 
     create table accounts (
         balance numeric(15,2) not null,
         tpin varchar(6) not null,
         created_at timestamp(6),
+        version bigint,
         id uuid not null,
         name varchar(100) not null,
         primary key (id)
@@ -220,11 +221,12 @@ Hibernate:
         balance numeric(15,2) not null,
         tpin varchar(6) not null,
         created_at timestamp(6),
+        version bigint,
         id uuid not null,
         name varchar(100) not null,
         primary key (id)
     )
-2026-06-01T11:03:35.360+05:30 DEBUG 29324 --- [    Test worker] org.hibernate.SQL                        : 
+2026-06-14T22:52:45.485+05:30 DEBUG 12568 --- [    Test worker] org.hibernate.SQL                        : 
     create table transactions (
         amount numeric(15,2) not null,
         created_at timestamp(6),
@@ -246,9 +248,9 @@ Hibernate:
         transfer_mode varchar(20) not null,
         primary key (id)
     )
-2026-06-01T11:03:35.366+05:30  INFO 29324 --- [    Test worker] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-06-01T11:03:35.900+05:30  WARN 29324 --- [    Test worker] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-06-01T11:03:36.282+05:30  INFO 29324 --- [    Test worker] com.banking.CoreBankingApplicationTest   : Started CoreBankingApplicationTest in 4.425 seconds (process running for 6.46)
+2026-06-14T22:52:45.489+05:30  INFO 12568 --- [    Test worker] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-06-14T22:52:45.989+05:30  WARN 12568 --- [    Test worker] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-06-14T22:52:46.386+05:30  INFO 12568 --- [    Test worker] com.banking.CoreBankingApplicationTest   : Started CoreBankingApplicationTest in 4.184 seconds (process running for 5.822)
 ]]></system-out>
   <system-err><![CDATA[Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build what is described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org/mockito/Mockito.html#0.3
 WARNING: A Java agent has been loaded dynamically (C:\Users\Hemanth Kumar\.m2\repository\net\bytebuddy\byte-buddy-agent\1.15.11\byte-buddy-agent-1.15.11.jar)

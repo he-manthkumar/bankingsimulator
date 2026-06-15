@@ -1,19 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.banking.controller.TransactionControllerTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-06-01T05:33:37.773Z" hostname="HEMANTHKUMAR" time="0.298">
+<testsuite name="com.banking.controller.TransactionControllerTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-06-14T17:22:47.906Z" hostname="HEMANTHKUMAR" time="0.41">
   <properties/>
-  <testcase name="test_settleTransfer_shouldReturnBadRequestWhenTpinIsBlank()" classname="com.banking.controller.TransactionControllerTest" time="0.02"/>
-  <testcase name="test_settleTransfer_shouldReturnSuccessWhenOnlyRequiredFieldsProvided()" classname="com.banking.controller.TransactionControllerTest" time="0.018"/>
-  <testcase name="test_getAllTransactions_shouldReturnEmptyListWhenNoTransactionsExist()" classname="com.banking.controller.TransactionControllerTest" time="0.005"/>
-  <testcase name="test_getTransaction_shouldReturn404WhenTransactionNotFound()" classname="com.banking.controller.TransactionControllerTest" time="0.005"/>
-  <testcase name="test_settleTransfer_shouldReturnTransactionWithEmptyTpinWhenTpinNotProvided()" classname="com.banking.controller.TransactionControllerTest" time="0.004"/>
+  <testcase name="test_getAllTransactions_shouldReturnEmptyListWhenNoTransactionsExist()" classname="com.banking.controller.TransactionControllerTest" time="0.016"/>
+  <testcase name="test_getTransaction_shouldReturn404WhenTransactionNotFound()" classname="com.banking.controller.TransactionControllerTest" time="0.008"/>
   <testcase name="test_getTransaction_shouldReturnTransactionWhenValidIdProvided()" classname="com.banking.controller.TransactionControllerTest" time="0.005"/>
-  <testcase name="test_saveTransaction_shouldReturnTransactionWithDefaultStatusWhenStatusNotProvided()" classname="com.banking.controller.TransactionControllerTest" time="0.007"/>
-  <testcase name="test_saveTransaction_shouldReturnTransactionWhenAllFieldsProvided()" classname="com.banking.controller.TransactionControllerTest" time="0.007"/>
-  <testcase name="test_saveTransaction_shouldReturnTransactionWhenStatusIsSuccess()" classname="com.banking.controller.TransactionControllerTest" time="0.005"/>
-  <testcase name="test_settleTransfer_shouldReturnTransactionWhenAllFieldsProvided()" classname="com.banking.controller.TransactionControllerTest" time="0.006"/>
-  <testcase name="test_getAllTransactions_shouldReturnListWhenTransactionsExist()" classname="com.banking.controller.TransactionControllerTest" time="0.006"/>
-  <system-out><![CDATA[2026-06-01T11:03:37.775+05:30  INFO 29324 --- [    Test worker] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.banking.controller.TransactionControllerTest]: TransactionControllerTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-2026-06-01T11:03:37.784+05:30  INFO 29324 --- [    Test worker] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.banking.CoreBankingApplication for test class com.banking.controller.TransactionControllerTest
+  <testcase name="test_saveTransaction_shouldReturnTransactionWithDefaultStatusWhenStatusNotProvided()" classname="com.banking.controller.TransactionControllerTest" time="0.011"/>
+  <testcase name="test_saveTransaction_shouldReturnTransactionWhenAllFieldsProvided()" classname="com.banking.controller.TransactionControllerTest" time="0.005"/>
+  <testcase name="test_saveTransaction_shouldReturnTransactionWhenStatusIsSuccess()" classname="com.banking.controller.TransactionControllerTest" time="0.004"/>
+  <testcase name="test_getAllTransactions_shouldReturnListWhenTransactionsExist()" classname="com.banking.controller.TransactionControllerTest" time="0.004"/>
+  <system-out><![CDATA[2026-06-14T22:52:47.907+05:30  INFO 12568 --- [    Test worker] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.banking.controller.TransactionControllerTest]: TransactionControllerTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-06-14T22:52:47.914+05:30  INFO 12568 --- [    Test worker] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.banking.CoreBankingApplication for test class com.banking.controller.TransactionControllerTest
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -24,13 +20,13 @@
 
  :: Spring Boot ::                (v3.4.1)
 
-2026-06-01T11:03:37.803+05:30  INFO 29324 --- [    Test worker] c.b.c.TransactionControllerTest          : Starting TransactionControllerTest using Java 24.0.1 with PID 29324 (started by Hemanth Kumar in D:\InternProject - Likith\banking-simulator-main\spring-boot-service)
-2026-06-01T11:03:37.804+05:30 DEBUG 29324 --- [    Test worker] c.b.c.TransactionControllerTest          : Running with Spring Boot v3.4.1, Spring v6.2.1
-2026-06-01T11:03:37.804+05:30  INFO 29324 --- [    Test worker] c.b.c.TransactionControllerTest          : No active profile set, falling back to 1 default profile: "default"
-2026-06-01T11:03:37.969+05:30  INFO 29324 --- [    Test worker] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
-2026-06-01T11:03:37.969+05:30  INFO 29324 --- [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
-2026-06-01T11:03:37.969+05:30  INFO 29324 --- [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
-2026-06-01T11:03:37.973+05:30  INFO 29324 --- [    Test worker] c.b.c.TransactionControllerTest          : Started TransactionControllerTest in 0.186 seconds (process running for 8.15)
+2026-06-14T22:52:47.935+05:30  INFO 12568 --- [    Test worker] c.b.c.TransactionControllerTest          : Starting TransactionControllerTest using Java 24.0.1 with PID 12568 (started by Hemanth Kumar in D:\InternProject - Likith\banking-simulator-main\spring-boot-service)
+2026-06-14T22:52:47.936+05:30 DEBUG 12568 --- [    Test worker] c.b.c.TransactionControllerTest          : Running with Spring Boot v3.4.1, Spring v6.2.1
+2026-06-14T22:52:47.936+05:30  INFO 12568 --- [    Test worker] c.b.c.TransactionControllerTest          : No active profile set, falling back to 1 default profile: "default"
+2026-06-14T22:52:48.253+05:30  INFO 12568 --- [    Test worker] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-06-14T22:52:48.253+05:30  INFO 12568 --- [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-06-14T22:52:48.254+05:30  INFO 12568 --- [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 1 ms
+2026-06-14T22:52:48.257+05:30  INFO 12568 --- [    Test worker] c.b.c.TransactionControllerTest          : Started TransactionControllerTest in 0.341 seconds (process running for 7.693)
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

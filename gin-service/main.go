@@ -6,6 +6,7 @@ import (
 
 	"banking/gin-service/db"
 	"banking/gin-service/handlers"
+	"banking/gin-service/outbox"
 	temporalsetup "banking/gin-service/temporal"
 
 	"github.com/gin-gonic/gin"
@@ -29,14 +30,20 @@ func main() {
 		HostPort: temporalHost,
 	})
 	if err != nil {
-		log.Printf("Warning: could not connect to Temporal at %s (%v) — falling back to goroutine settlement",
+		log.Printf("Warning: could not connect to Temporal at %s (%v) — workflows will not start",
 			temporalHost, err)
 	} else {
 		defer tc.Close()
 
 		handlers.TemporalClient = tc
-
 		go temporalsetup.StartWorker(tc)
+
+		mongoDBName := os.Getenv("MONGO_DB")
+		if mongoDBName == "" {
+			mongoDBName = "banking"
+		}
+		go outbox.StartOutboxWatcher(db.MongoClient, tc, mongoDBName)
+
 		log.Println("Temporal client connected:", temporalHost)
 	}
 
@@ -47,8 +54,11 @@ func main() {
 	})
 
 	r.POST("/process-transfer", handlers.ProcessTransfer)
-	r.GET("/transfer/:id", handlers.GetTransferStatus)
+
 	r.GET("/transfers", handlers.GetAllTransfers)
+	r.GET("/transfer/:id", handlers.GetTransferStatus)    
+	r.GET("/transfer/:id/status", handlers.GetTransferStatus) 
+	r.PUT("/transfer/:id/cancel", handlers.CancelTransfer)
 
 	log.Println("Gin Transfer Service running on :8081")
 	r.Run(":8081")

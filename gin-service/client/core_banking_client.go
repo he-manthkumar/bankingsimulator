@@ -27,60 +27,19 @@ func NewCoreBankingClient() *CoreBankingClient {
 	}
 }
 
-type SettleTransferRequest struct {
-	FromAccount  string  `json:"fromAccount"`
-	ToAccount    string  `json:"toAccount"`
-	Amount       float64 `json:"amount"`
-	TransferMode string  `json:"transferMode"`
-	Tpin         string  `json:"tpin"`
+
+type DebitResult struct {
+	AccountID   string  `json:"accountId"`
+	NewBalance  float64 `json:"newBalance"`
+	TransferRef string  `json:"transferRef"`
 }
 
-type SettleTransferResponse struct {
-	ID           string  `json:"id"`
-	FromAccount  string  `json:"fromAccount"`
-	ToAccount    string  `json:"toAccount"`
-	Amount       float64 `json:"amount"`
-	TransferMode string  `json:"transferMode"`
-	Status       string  `json:"status"`
+type CreditResult struct {
+	AccountID   string  `json:"accountId"`
+	NewBalance  float64 `json:"newBalance"`
+	TransferRef string  `json:"transferRef"`
 }
 
-func (c *CoreBankingClient) SettleTransfer(fromAccount, toAccount string, amount float64, transferMode string, tpin string) (*SettleTransferResponse, error) {
-	payload := SettleTransferRequest{
-		FromAccount:  fromAccount,
-		ToAccount:    toAccount,
-		Amount:       amount,
-		TransferMode: transferMode,
-		Tpin:         tpin,
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	resp, err := c.httpClient.Post(c.baseURL+"/transactions/settle", "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return nil, fmt.Errorf("core banking service unavailable: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("settlement failed with status: %d", resp.StatusCode)
-	}
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var result SettleTransferResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	log.Printf("Settlement successful via CoreBankingClient: txn %s", result.ID)
-	return &result, nil
-}
 
 func (c *CoreBankingClient) GetTransaction(transactionID string) (map[string]interface{}, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/transactions/" + transactionID)
@@ -102,4 +61,83 @@ func (c *CoreBankingClient) GetTransaction(transactionID string) (map[string]int
 	}
 
 	return result, nil
+}
+
+type debitRequest struct {
+	Amount      float64 `json:"amount"`
+	TransferRef string  `json:"transferRef"`
+	Tpin        string  `json:"tpin"`
+}
+
+func (c *CoreBankingClient) DebitAccount(accountID string, amount float64, transferRef, tpin string) (*DebitResult, error) {
+	body, err := json.Marshal(debitRequest{Amount: amount, TransferRef: transferRef, Tpin: tpin})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal debit request: %w", err)
+	}
+
+	resp, err := c.httpClient.Post(
+		fmt.Sprintf("%s/accounts/%s/debit", c.baseURL, accountID),
+		"application/json",
+		bytes.NewBuffer(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("core banking service unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("debit failed with status %d for account %s", resp.StatusCode, accountID)
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read debit response: %w", err)
+	}
+
+	var result DebitResult
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse debit response: %w", err)
+	}
+
+	log.Printf("Debit successful: account %s, amount %.2f, ref %s", accountID, amount, transferRef)
+	return &result, nil
+}
+
+type creditRequest struct {
+	Amount      float64 `json:"amount"`
+	TransferRef string  `json:"transferRef"`
+}
+
+func (c *CoreBankingClient) CreditAccount(accountID string, amount float64, transferRef string) (*CreditResult, error) {
+	body, err := json.Marshal(creditRequest{Amount: amount, TransferRef: transferRef})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal credit request: %w", err)
+	}
+
+	resp, err := c.httpClient.Post(
+		fmt.Sprintf("%s/accounts/%s/credit", c.baseURL, accountID),
+		"application/json",
+		bytes.NewBuffer(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("core banking service unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("credit failed with status %d for account %s", resp.StatusCode, accountID)
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read credit response: %w", err)
+	}
+
+	var result CreditResult
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse credit response: %w", err)
+	}
+
+	log.Printf("Credit successful: account %s, amount %.2f, ref %s", accountID, amount, transferRef)
+	return &result, nil
 }

@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Banking Simulator — Distributed Patterns with Temporal & MongoDB</title>
+  <meta name="description" content="How four distributed systems patterns — Transactional Outbox, Temporal Signal, Query/Update, and Saga Compensation — power a multi-service banking simulator."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet"/>
+  <style>
+    /* ══════════════════════════════════════
+       TOKENS & RESET
+    ══════════════════════════════════════ */
+    :root {
+      --bg: #FAFAFA;
+      --surface: #FFFFFF;
+      --text: #111827;
+      --text-muted: #4B5563;
+      --border: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --accent: #4F46E5;
+      --accent-bg: #EEF2FF;
+      --success: #059669;
+      --warning: #D97706;
+      --danger: #DC2626;
+      --purple: #7C3AED;
+      --blue: #2563EB;
+      --code-bg: #111827;
+      --radius: 8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, sans-serif;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ══════════════════════════════════════
+       LAYOUT
+    ══════════════════════════════════════ */
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    nav {
+      padding: 2rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4rem;
+    }
+    .nav-brand {
+      font-family: 'Lora', serif;
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+
+    /* ══════════════════════════════════════
+       TYPOGRAPHY
+    ══════════════════════════════════════ */
+    h1, h2, h3, h4 {
+      font-family: 'Lora', serif;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    h1 { font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem; }
+    h2 {
+      font-size: 1.75rem; font-weight: 600;
+      margin-top: 3.5rem; margin-bottom: 1.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 { font-size: 1.35rem; font-weight: 600; margin-top: 2rem; margin-bottom: 0.75rem; }
+    h4 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    p { margin-bottom: 1.5rem; font-size: 1.05rem; color: var(--text-muted); }
+    ul, ol { margin-bottom: 1.5rem; padding-left: 1.5rem; color: var(--text-muted); }
+    li { margin-bottom: 0.5rem; font-size: 1.05rem; }
+
+    /* ══════════════════════════════════════
+       HERO
+    ══════════════════════════════════════ */
+    .hero { margin-bottom: 4rem; }
+    .hero-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+      display: block;
+    }
+    .hero-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 2rem;
+    }
+
+    /* ══════════════════════════════════════
+       TAGS & BADGES
+    ══════════════════════════════════════ */
+    .tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.6rem;
+      background: var(--surface);
+      border: 1px solid var(--border-dark);
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+    .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 500;
+      display: inline-block;
+      border: 1px solid transparent;
+    }
+    .badge.success    { background: #ECFDF5; color: var(--success); border-color: #A7F3D0; }
+    .badge.warning    { background: #FFFBEB; color: var(--warning); border-color: #FDE68A; }
+    .badge.info       { background: var(--accent-bg); color: var(--accent); border-color: #C7D2FE; }
+    .badge.danger     { background: #FEF2F2; color: var(--danger); border-color: #FECACA; }
+    .badge.neutral    { background: var(--surface); color: var(--text-muted); border-color: var(--border-dark); }
+    .badge.purple     { background: #F5F3FF; color: var(--purple); border-color: #DDD6FE; }
+    .badge.orange     { background: #FFF7ED; color: #C2410C; border-color: #FED7AA; }
+
+    /* ══════════════════════════════════════
+       CARDS & GRIDS
+    ══════════════════════════════════════ */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 768px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+      display: block;
+      font-weight: 600;
+    }
+    .card p { font-size: 0.95rem; margin-bottom: 0; }
+    .card ul { margin-bottom: 0; padding-left: 1rem; }
+    .card li { font-size: 0.95rem; }
+
+    /* Pattern highlight cards */
+    .pattern-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border-top: 3px solid var(--accent);
+      margin-bottom: 1rem;
+    }
+    .pattern-card.outbox  { border-top-color: #2563EB; }
+    .pattern-card.signal  { border-top-color: #7C3AED; }
+    .pattern-card.query   { border-top-color: #059669; }
+    .pattern-card.saga    { border-top-color: #DC2626; }
+
+    .pattern-number {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+      display: block;
+    }
+    .pattern-card.outbox .pattern-number { color: #2563EB; }
+    .pattern-card.signal .pattern-number { color: #7C3AED; }
+    .pattern-card.query  .pattern-number { color: #059669; }
+    .pattern-card.saga   .pattern-number { color: #DC2626; }
+
+    .pattern-card h4 { margin-bottom: 0.25rem; font-size: 1rem; }
+    .pattern-card p { font-size: 0.9rem; margin-bottom: 0; margin-top: 0.3rem; }
+
+    /* ══════════════════════════════════════
+       CODE
+    ══════════════════════════════════════ */
+    .code-wrap {
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .code-header {
+      background: #1F2937;
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid #374151;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: #9CA3AF;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      overflow-x: auto;
+      margin: 0;
+    }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+    pre code { color: #E5E7EB; line-height: 1.5; }
+    p code, li code {
+      background: #F3F4F6;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-size: 0.85em;
+      color: var(--danger);
+      border: 1px solid #E5E7EB;
+    }
+
+    /* Syntax */
+    .kw  { color: #F87171; }
+    .fn  { color: #60A5FA; }
+    .str { color: #34D399; }
+    .cm  { color: #9CA3AF; font-style: italic; }
+    .num { color: #FBBF24; }
+    .key { color: #A78BFA; }
+    .op  { color: #F9A8D4; }
+
+    /* ══════════════════════════════════════
+       TABLES
+    ══════════════════════════════════════ */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 2rem;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--border);
+    }
+    th, td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: #F9FAFB;
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    td { font-size: 0.95rem; color: var(--text-muted); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .bad-col  { color: var(--danger);  font-weight: 500; }
+    .good-col { color: var(--success); font-weight: 500; }
+
+    /* ══════════════════════════════════════
+       MISC
+    ══════════════════════════════════════ */
+    blockquote {
+      border-left: 4px solid var(--accent);
+      background: var(--surface);
+      padding: 1.5rem;
+      margin: 2rem 0;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      font-style: italic;
+      color: var(--text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .arch-diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 2rem;
+      border-radius: var(--radius);
+      margin-bottom: 2rem;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .arch-diagram code {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      display: block;
+      white-space: pre;
+      line-height: 1.6;
+      text-align: left;
+      font-size: 0.82rem;
+    }
+
+    /* State machine */
+    .state-flow {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin: 1.5rem 0 2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1.25rem 1.5rem;
+      border-radius: var(--radius);
+    }
+    .state-node {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.3rem 0.7rem;
+      border-radius: 5px;
+      border: 1px solid transparent;
+    }
+    .sn-pending     { background: #FFFBEB; color: #92400E; border-color: #FDE68A; }
+    .sn-waiting     { background: var(--accent-bg); color: var(--accent); border-color: #C7D2FE; }
+    .sn-debiting    { background: #F5F3FF; color: var(--purple); border-color: #DDD6FE; }
+    .sn-crediting   { background: #EFF6FF; color: var(--blue); border-color: #BFDBFE; }
+    .sn-success     { background: #ECFDF5; color: var(--success); border-color: #A7F3D0; }
+    .sn-failed      { background: #FEF2F2; color: var(--danger); border-color: #FECACA; }
+    .sn-cancelled   { background: #F9FAFB; color: #374151; border-color: #D1D5DB; }
+    .sn-compensated { background: #FFF7ED; color: #C2410C; border-color: #FED7AA; }
+    .sn-arrow       { color: var(--border-dark); font-weight: 400; font-size: 0.9rem; }
+
+    footer {
+      margin-top: 5rem;
+      padding: 3rem 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    .footer-ports {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="page">
+  <nav>
+    <a href="#" class="nav-brand">Banking Simulator</a>
+    <ul class="nav-links">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#patterns">Patterns</a></li>
+      <li><a href="#workflow">Workflow</a></li>
+      <li><a href="#design">Design</a></li>
+    </ul>
+  </nav>
+
+  <div class="hero">
+    <span class="hero-eyebrow">Internship Project — Distributed Systems</span>
+    <h1>Four Patterns. One Banking Simulator.</h1>
+    <p>
+      How Transactional Outbox, Temporal Signal, Query/Update, and Saga Compensation solve real distributed systems problems — wired together across five services and three data stores.
+    </p>
+    <div class="hero-tags">
+      <span class="tag">Go · Gin</span>
+      <span class="tag">Spring Boot · Java</span>
+      <span class="tag">FastAPI · Python</span>
+      <span class="tag">Temporal</span>
+      <span class="tag">MongoDB (replica set)</span>
+      <span class="tag">PostgreSQL</span>
+      <span class="tag">Streamlit</span>
+      <span class="tag">Docker Compose</span>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────── OVERVIEW ── -->
+  <section id="overview">
+    <h2>Architecture Overview</h2>
+    <p>
+      Five services, three databases, one workflow engine. Each service owns exactly one concern and communicates through well-defined interfaces.
+    </p>
+
+    <div class="grid-3">
+      <div class="card">
+        <span class="card-label">Core Banking</span>
+        <h4>Spring Boot</h4>
+        <ul>
+          <li>Account balances &amp; TPIN auth</li>
+          <li>Discrete <code>debit</code> and <code>credit</code> endpoints</li>
+          <li>Source of truth for money</li>
+          <li><span class="badge neutral">PostgreSQL :5432</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-label">Transfer Processor</span>
+        <h4>Gin (Go)</h4>
+        <ul>
+          <li>Receives all transfer requests</li>
+          <li>Atomic outbox writes</li>
+          <li>Hosts Temporal worker</li>
+          <li><span class="badge neutral">MongoDB :27017</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-label">Analytics &amp; Fraud</span>
+        <h4>FastAPI (Python)</h4>
+        <ul>
+          <li>Read-only analytics layer</li>
+          <li>Per-transfer fraud scoring</li>
+          <li>Reads Spring Boot's Postgres</li>
+          <li><span class="badge neutral">FastAPI :8082</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Service Topology</h3>
+    <div class="arch-diagram">
+      <code>
+  Streamlit UI (:8501)
+         │
+         ├──────────────────────────────────────────┐
+         ▼                                          ▼
+  Gin Service (:8081)                    Spring Boot (:8080)
+         │      ▲                               │
+         │      │ HTTP /debit                   │
+         │      │ HTTP /credit    ┌─────────────┘
+         │      └─────────────────┤
+         │                        └─ FastAPI reads Postgres
+         ▼
+  MongoDB :27017 (replica set)
+  ┌──────────┬────────────┐
+  │transfers │  outbox    │   ← written atomically in one transaction
+  └────┬─────┴─────┬──────┘
+       │           │
+       │    change stream
+       │           ▼
+       │    Outbox Watcher (goroutine)
+       │           │ Signal "outbox-ready"
+       │           ▼
+       └──── Temporal Workflow (:7233)
+                   │
+                   ├─ DebitAccount  → Spring Boot POST /accounts/{id}/debit
+                   ├─ CreditAccount → Spring Boot POST /accounts/{id}/credit
+                   └─ (Saga compensation if credit fails)
+                              │
+                              ▼
+                       PostgreSQL :5432
+      </code>
+    </div>
+
+    <h3>Transfer State Machine</h3>
+    <p>Every transfer moves through at most six states. The path depends on timing, TPIN validation, and whether the credit step succeeds.</p>
+    <div class="state-flow">
+      <span class="state-node sn-pending">PENDING</span>
+      <span class="sn-arrow">→</span>
+      <span class="state-node sn-waiting">WAITING</span>
+      <span class="sn-arrow">→</span>
+      <span class="state-node sn-debiting">DEBITING</span>
+      <span class="sn-arrow">→</span>
+      <span class="state-node sn-crediting">CREDITING</span>
+      <span class="sn-arrow">→</span>
+      <span class="state-node sn-success">COMPLETED</span>
+      &nbsp;&nbsp;
+      <span class="state-node sn-cancelled">CANCELLED</span>
+      <span class="state-node sn-failed">FAILED</span>
+      <span class="state-node sn-compensated">COMPENSATED</span>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>State</th><th>Trigger</th><th>Money moved?</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="badge warning">PENDING</span></td><td>Transfer written to MongoDB. Workflow just started.</td><td>No</td></tr>
+        <tr><td><span class="badge info">WAITING</span></td><td>Selector blocking on timer / outbox signal / cancel update.</td><td>No</td></tr>
+        <tr><td><span class="badge purple">DEBITING</span></td><td>Timer or signal fired. Calling <code>POST /accounts/{id}/debit</code>.</td><td>In progress</td></tr>
+        <tr><td><span class="badge info">CREDITING</span></td><td>Debit committed. Calling <code>POST /accounts/{id}/credit</code>.</td><td>Sender debited</td></tr>
+        <tr><td><span class="badge success">COMPLETED</span></td><td>Both debit and credit committed to Postgres.</td><td>Yes — settled</td></tr>
+        <tr><td><span class="badge neutral">CANCELLED</span></td><td>Cancel Update received while still WAITING. No debit attempted.</td><td>No</td></tr>
+        <tr><td><span class="badge danger">FAILED</span></td><td>Debit itself failed (wrong TPIN, insufficient funds, service down).</td><td>No</td></tr>
+        <tr><td><span class="badge orange">COMPENSATED</span></td><td>Debit committed but credit failed. Saga refunded the sender.</td><td>Reversed</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ─────────────────────────────────────── PATTERNS ── -->
+  <section id="patterns">
+    <h2>The Four Distributed Patterns</h2>
+    <p>
+      Each pattern solves a specific failure mode that would otherwise cause data loss, stuck transfers, or silent corruption.
+    </p>
+
+    <div class="pattern-card outbox">
+      <span class="pattern-number">Pattern 01 · Transactional Outbox</span>
+      <h4>Guarantee the workflow always starts</h4>
+      <p>The naive approach writes the transfer to MongoDB, then starts the Temporal workflow. If Temporal is unreachable between those two operations, the transfer record exists but no workflow ever runs — stuck forever.</p>
+    </div>
+
+    <p>The fix: write both the transfer document and the outbox document inside a single MongoDB multi-document transaction. Either both commit or both roll back. No half-state is possible.</p>
+
+    <div class="code-wrap">
+      <div class="code-header">handlers/transfer.go — atomic write</div>
+<pre><code><span class="cm">// single MongoDB session transaction</span>
+session.<span class="fn">WithTransaction</span>(ctx, <span class="kw">func</span>(sessCtx mongo.SessionContext) (<span class="kw">interface</span>{}, <span class="kw">error</span>) {
+    db.Repo.<span class="fn">CreateWithSession</span>(sessCtx, session, <span class="op">&amp;</span>transfer)   <span class="cm">// transfers collection</span>
+    db.OutboxRepo.<span class="fn">CreateWithSession</span>(sessCtx, session, <span class="op">&amp;</span>outbox) <span class="cm">// outbox collection</span>
+    <span class="cm">// if either fails → both roll back</span>
+    <span class="kw">return nil, nil</span>
+})</code></pre>
+    </div>
+
+    <p>The outbox entry carries <code>status: UNPROCESSED</code>. A background watcher goroutine monitors the collection via a MongoDB change stream and triggers the workflow when it fires.</p>
+
+    <div class="pattern-card signal">
+      <span class="pattern-number">Pattern 02 · Temporal Signal — Outbox-Ready</span>
+      <h4>Decouple the HTTP handler from workflow start</h4>
+      <p>If the handler calls Temporal directly (synchronously), any Temporal hiccup makes the transfer request fail for the user. Signals decouple them — the handler returns 202 immediately and the watcher bridges the gap.</p>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-header">outbox/watcher.go — change stream → signal</div>
+<pre><code>stream, _ := col.<span class="fn">Watch</span>(ctx, pipeline, opts) <span class="cm">// fires on every UNPROCESSED insert</span>
+<span class="kw">for</span> stream.<span class="fn">Next</span>(ctx) {
+    entry := <span class="fn">decode</span>(stream)
+    <span class="cm">// wake up the waiting workflow</span>
+    tc.<span class="fn">SignalWorkflow</span>(ctx,
+        <span class="str">"settlement-"</span> + entry.TransferID,
+        <span class="str">""</span>,
+        <span class="str">"outbox-ready"</span>,
+        <span class="kw">nil</span>,
+    )
+}</code></pre>
+    </div>
+
+    <blockquote>
+      Handler → MongoDB (atomic write) → change stream → watcher → Temporal Signal → workflow resumes. The HTTP response and the workflow start are fully decoupled.
+    </blockquote>
+
+    <div class="pattern-card query">
+      <span class="pattern-number">Pattern 03 · Temporal Query &amp; Update</span>
+      <h4>Live inspection and validated in-flight cancellation</h4>
+      <p><strong>Query:</strong> while the workflow is running, a <code>getStatus</code> query handler returns live state — countdown timer, whether debit committed, outbox ready flag. No polling the database; the workflow reports its own internal state.</p>
+      <p><strong>Update:</strong> unlike a Signal (fire-and-forget), a Temporal Update has a validator. If the transfer is already past WAITING, the validator rejects the cancellation request and the HTTP caller gets a 409 with a reason — not a silent failure.</p>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-header">settlement_workflow.go — query + update handlers</div>
+<pre><code><span class="cm">// Query: live state, visible from GET /transfer/:id/status</span>
+workflow.<span class="fn">SetQueryHandler</span>(ctx, <span class="str">"getStatus"</span>, <span class="kw">func</span>() (WorkflowState, <span class="kw">error</span>) {
+    <span class="kw">return</span> WorkflowState{
+        State:            state.State,          <span class="cm">// "WAITING" / "DEBITING" / ...</span>
+        RemainingSeconds: remaining,            <span class="cm">// countdown for NEFT/RTGS</span>
+        DebitCompleted:   state.DebitCompleted, <span class="cm">// did debit commit?</span>
+    }, <span class="kw">nil</span>
+})
+
+<span class="cm">// Update: synchronous cancel with validation</span>
+workflow.<span class="fn">SetUpdateHandlerWithOptions</span>(ctx, <span class="str">"requestCancellation"</span>,
+    <span class="kw">func</span>(ctx workflow.Context) <span class="kw">error</span> {
+        state.CancelRequested = <span class="kw">true</span>
+        cancelCh.<span class="fn">Send</span>(ctx, <span class="kw">struct</span>{}{})
+        <span class="kw">return nil</span>
+    },
+    workflow.UpdateHandlerOptions{
+        Validator: <span class="kw">func</span>(ctx workflow.Context) <span class="kw">error</span> {
+            <span class="kw">if</span> state.State != <span class="str">"WAITING"</span> {
+                <span class="kw">return</span> temporal.<span class="fn">NewApplicationError</span>(
+                    <span class="str">"cannot cancel: transfer is already "</span> + state.State, <span class="str">"REJECTED"</span>,
+                )
+            }
+            <span class="kw">return nil</span>
+        },
+    },
+)</code></pre>
+    </div>
+
+    <div class="pattern-card saga">
+      <span class="pattern-number">Pattern 04 · Saga Compensation</span>
+      <h4>Undo committed operations when a later step fails</h4>
+      <p>Debit commits to Postgres (money leaves sender). Then the credit call fails — Spring Boot is down, receiver account frozen, network partition. Without Saga, the money is gone. Saga registers an undo function before each step executes. On failure, it runs them all in reverse.</p>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-header">settlement_workflow.go — saga pattern</div>
+<pre><code>s := <span class="op">&amp;</span>saga.<span class="fn">Saga</span>{}
+
+<span class="cm">// register compensation BEFORE the step executes</span>
+s.<span class="fn">AddCompensation</span>(<span class="kw">func</span>(sagaCtx workflow.Context) <span class="kw">error</span> {
+    <span class="kw">return</span> workflow.<span class="fn">ExecuteActivity</span>(sagaCtx, act.CreditAccount, CreditInput{
+        AccountID:   input.FromAccount,              <span class="cm">// ← refund the sender</span>
+        Amount:      input.Amount,
+        TransferRef: input.TransferID + <span class="str">"-refund"</span>,
+    }).<span class="fn">Get</span>(sagaCtx, <span class="kw">nil</span>)
+})
+
+<span class="cm">// step 1: debit commits to Postgres</span>
+<span class="kw">if</span> err := workflow.<span class="fn">ExecuteActivity</span>(actCtx, act.DebitAccount, ...). ...; err != <span class="kw">nil</span> {
+    <span class="fn">markFailed</span>(); <span class="kw">return nil</span>   <span class="cm">// debit failed → no saga needed</span>
+}
+
+<span class="cm">// step 2: credit — if this fails, saga must undo step 1</span>
+<span class="kw">if</span> err := workflow.<span class="fn">ExecuteActivity</span>(actCtx, act.CreditAccount, ...)...; err != <span class="kw">nil</span> {
+    s.<span class="fn">Compensate</span>(ctx)          <span class="cm">// ← runs the refund in reverse order</span>
+    <span class="fn">markCompensated</span>(); <span class="kw">return nil</span>
+}</code></pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-header">temporal/saga/saga.go — 32-line coordinator</div>
+<pre><code><span class="kw">type</span> <span class="fn">Saga</span> <span class="kw">struct</span> {
+    compensations []<span class="kw">func</span>(workflow.Context) <span class="kw">error</span>
+}
+
+<span class="kw">func</span> (s *<span class="fn">Saga</span>) <span class="fn">AddCompensation</span>(fn <span class="kw">func</span>(workflow.Context) <span class="kw">error</span>) {
+    s.compensations = <span class="fn">append</span>(s.compensations, fn)
+}
+
+<span class="kw">func</span> (s *<span class="fn">Saga</span>) <span class="fn">Compensate</span>(ctx workflow.Context) {
+    <span class="cm">// LIFO — last committed step is undone first</span>
+    <span class="kw">for</span> i := <span class="fn">len</span>(s.compensations) - <span class="num">1</span>; i >= <span class="num">0</span>; i-- {
+        <span class="kw">if</span> err := s.compensations[i](ctx); err != <span class="kw">nil</span> {
+            workflow.<span class="fn">GetLogger</span>(ctx).<span class="fn">Error</span>(<span class="str">"compensation failed"</span>, <span class="str">"step"</span>, i, <span class="str">"error"</span>, err)
+            <span class="cm">// continue — all compensations must run regardless</span>
+        }
+    }
+}</code></pre>
+    </div>
+
+    <p>The key design rule: <strong>Compensate never stops early</strong>. Even if one compensation step fails, the rest must run. Leaving other steps uncompensated would leave the system in a worse state than having a logged error.</p>
+  </section>
+
+  <!-- ─────────────────────────────────────── WORKFLOW ── -->
+  <section id="workflow">
+    <h2>Inside the Workflow</h2>
+    <p>
+      The <code>SettlementWorkflow</code> replaces what used to be a <code>time.Sleep</code> goroutine. It handles IMPS (0s), RTGS (15s), and NEFT (30s) with the same code path, using a selector to multiplex between three competing events.
+    </p>
+
+    <h3>Why not just goroutines?</h3>
+    <div class="code-wrap">
+      <div class="code-header">the old approach</div>
+<pre><code><span class="cm">// before Temporal</span>
+<span class="kw">go func</span>() {
+    time.<span class="fn">Sleep</span>(<span class="num">30</span> * time.Second)
+    <span class="fn">settleTransfer</span>(transfer)  <span class="cm">// dies if process restarts</span>
+}()</code></pre>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Scenario</th><th>Goroutine</th><th>Temporal Workflow</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Service restart mid-wait</strong></td>
+          <td class="bad-col">Transfer stuck forever</td>
+          <td class="good-col">Resumes from exact point</td>
+        </tr>
+        <tr>
+          <td><strong>Spring Boot temporarily down</strong></td>
+          <td class="bad-col">Fails silently, no retry</td>
+          <td class="good-col">Retried 3× with backoff</td>
+        </tr>
+        <tr>
+          <td><strong>Inspect in-flight transfers</strong></td>
+          <td class="bad-col">Zero visibility</td>
+          <td class="good-col">Query handler returns live state</td>
+        </tr>
+        <tr>
+          <td><strong>Cancel before settlement</strong></td>
+          <td class="bad-col">No mechanism exists</td>
+          <td class="good-col">Update handler with validator</td>
+        </tr>
+        <tr>
+          <td><strong>Debit committed, credit failed</strong></td>
+          <td class="bad-col">Money lost — manual ops fix</td>
+          <td class="good-col">Saga fires, sender refunded</td>
+        </tr>
+        <tr>
+          <td><strong>Visibility into history</strong></td>
+          <td class="bad-col">Nothing</td>
+          <td class="good-col">Full event log in Temporal UI</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>The Selector pattern</h3>
+    <p>The WAITING state uses a <code>workflow.Selector</code> instead of a simple sleep. This is what makes cancellation possible — the selector races the timer against the cancel signal and whichever fires first wins.</p>
+
+    <div class="code-wrap">
+      <div class="code-header">settlement_workflow.go — selector</div>
+<pre><code>sel := workflow.<span class="fn">NewSelector</span>(ctx)
+
+timerFuture  := workflow.<span class="fn">NewTimer</span>(ctx, delay)           <span class="cm">// 0s / 15s / 30s</span>
+outboxCh     := workflow.<span class="fn">GetSignalChannel</span>(ctx, <span class="str">"outbox-ready"</span>)
+
+sel.<span class="fn">AddFuture</span>(timerFuture, <span class="kw">func</span>(_ workflow.Future) {
+    state.State = <span class="str">"DEBITING"</span>
+})
+sel.<span class="fn">AddReceive</span>(outboxCh, <span class="kw">func</span>(_ workflow.ReceiveChannel, _ <span class="kw">bool</span>) {
+    state.OutboxReady = <span class="kw">true</span>
+    state.State = <span class="str">"DEBITING"</span>
+})
+sel.<span class="fn">AddReceive</span>(cancelCh, <span class="kw">func</span>(_ workflow.ReceiveChannel, _ <span class="kw">bool</span>) {
+    state.State = <span class="str">"CANCELLED"</span>
+})
+
+sel.<span class="fn">Select</span>(ctx)  <span class="cm">// blocks until one fires</span></code></pre>
+    </div>
+
+    <h3>Why MongoDB needs a replica set</h3>
+    <p>
+      MongoDB change streams — used by the outbox watcher — require the oplog, which only exists on replica sets. A standalone <code>mongod</code> cannot produce change events. The compose setup bootstraps a single-node replica set on first start:
+    </p>
+    <div class="code-wrap">
+      <div class="code-header">mongo-init container</div>
+<pre><code><span class="cm">// one-time initialization — runs via mongo-init service</span>
+rs.<span class="fn">initiate</span>({ _id: <span class="str">"rs0"</span>, members: [{ _id: <span class="num">0</span>, host: <span class="str">"mongo:27017"</span> }] })</code></pre>
+    </div>
+    <p>A single-node replica set has all the oplog machinery but none of the multi-node overhead. It is the minimum viable setup for change streams in development.</p>
+
+    <h3>Why debit and credit are separate endpoints</h3>
+    <p>
+      The old system had one <code>POST /transactions/settle</code> that atomically debited and credited inside a single Postgres transaction. That's safe — but it makes Saga impossible. You cannot undo half an atomic transaction.
+    </p>
+    <div class="grid-2">
+      <div class="card">
+        <span class="card-label" style="color:var(--danger)">Old — atomic settle</span>
+        <p><code>BEGIN → debit → credit → COMMIT</code></p>
+        <p style="margin-top:0.75rem;">One unit. Cannot undo partially. If credit fails, whole thing rolls back — but if it committed, there's no undo.</p>
+      </div>
+      <div class="card">
+        <span class="card-label" style="color:var(--success)">New — split endpoints</span>
+        <p><code>BEGIN → debit → COMMIT</code><br/><code>BEGIN → credit → COMMIT</code></p>
+        <p style="margin-top:0.75rem;">Two separate commits. Saga can target the first independently. Compensation is meaningful.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────── DESIGN ── -->
+  <section id="design">
+    <h2>Design Decisions</h2>
+
+    <h3>Two databases, intentionally out of sync</h3>
+    <p>
+      MongoDB and PostgreSQL are intentionally desynchronized during the NEFT/RTGS settlement window. This mirrors how real banking infrastructure works — the transfer is recorded immediately, but it's not settled until the workflow completes.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Concern</th><th>Transfers (MongoDB)</th><th>Balances (PostgreSQL)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Write timing</strong></td>
+          <td>T+0, before settlement begins</td>
+          <td>Only after both debit and credit succeed</td>
+        </tr>
+        <tr>
+          <td><strong>Schema</strong></td>
+          <td>Flexible — status evolves in-place</td>
+          <td>Fixed — migration required for changes</td>
+        </tr>
+        <tr>
+          <td><strong>Failure cost</strong></td>
+          <td>Duplicate or missed record</td>
+          <td>Money created or destroyed</td>
+        </tr>
+        <tr>
+          <td><strong>Consistency</strong></td>
+          <td>Eventual — reflects workflow progress</td>
+          <td>Strong — ACID, per-endpoint transactions</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <blockquote>
+      "PostgreSQL is where money lives. MongoDB is where transfers happen."
+    </blockquote>
+
+    <h3>What each pattern failure looks like in production</h3>
+    <table>
+      <thead>
+        <tr><th>Pattern</th><th>Without it</th><th>With it</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Outbox</strong></td>
+          <td class="bad-col">Transfer exists, workflow never starts — stuck permanently</td>
+          <td class="good-col">Atomic write guarantees watcher always picks it up</td>
+        </tr>
+        <tr>
+          <td><strong>Signal</strong></td>
+          <td class="bad-col">Handler blocks on Temporal — any lag = user-visible failure</td>
+          <td class="good-col">202 in milliseconds, watcher bridges asynchronously</td>
+        </tr>
+        <tr>
+          <td><strong>Query</strong></td>
+          <td class="bad-col">DB shows stale PENDING during 30s NEFT window</td>
+          <td class="good-col">Live countdown, debit state, outbox flag from workflow</td>
+        </tr>
+        <tr>
+          <td><strong>Update</strong></td>
+          <td class="bad-col">Cancel is fire-and-forget — user gets 200 even if it was ignored</td>
+          <td class="good-col">Validator rejects if past WAITING — user gets 409 + reason</td>
+        </tr>
+        <tr>
+          <td><strong>Saga</strong></td>
+          <td class="bad-col">Debit commits, credit fails — sender loses money permanently</td>
+          <td class="good-col">Saga refunds sender automatically — status: COMPENSATED</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Tradeoffs and honest limitations</h3>
+    <div class="grid-2">
+      <div class="card">
+        <span class="card-label" style="color:var(--success)">What works well</span>
+        <ul>
+          <li>Outbox pattern is fully atomic — no transfer can slip through without a workflow.</li>
+          <li>Saga compensation is automatic — no ops intervention needed for credit failures.</li>
+          <li>IMPS, NEFT, and RTGS share identical workflow code — only the delay differs.</li>
+          <li>Query handler eliminates polling — status reflects live workflow internal state.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-label" style="color:var(--danger)">Honest limitations</span>
+        <ul>
+          <li>Temporal runs in dev mode (<code>temporal server start-dev</code>) — not production-grade persistence.</li>
+          <li>Fraud detection is threshold-based, not ML.</li>
+          <li>MongoDB replica set is single-node — no actual replication.</li>
+          <li>TPIN is stored as plain text — not for real production use.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-ports">
+      <span class="badge neutral">Spring Boot :8080</span>
+      <span class="badge neutral">Gin :8081</span>
+      <span class="badge neutral">FastAPI :8082</span>
+      <span class="badge neutral">Streamlit :8501</span>
+      <span class="badge neutral">Temporal UI :8233</span>
+    </div>
+    <p style="font-size:0.85rem;color:#9CA3AF;margin-bottom:0;">
+      Banking Simulator · Distributed Patterns with Temporal &amp; MongoDB
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

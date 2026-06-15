@@ -187,10 +187,13 @@ st.markdown("""
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
 
-    .status-success  { background: rgba(212,243,121,0.15);  color: var(--green);  border: 1px solid rgba(212,243,121,0.25); }
-    .status-pending  { background: rgba(251,211,141,0.15);  color: var(--yellow); border: 1px solid rgba(251,211,141,0.25); }
-    .status-processing { background: rgba(144,205,244,0.15); color: var(--blue);  border: 1px solid rgba(144,205,244,0.25); }
-    .status-failed   { background: rgba(252,129,129,0.15);   color: var(--red);    border: 1px solid rgba(252,129,129,0.25); }
+    .status-success      { background: rgba(212,243,121,0.15);  color: var(--green);  border: 1px solid rgba(212,243,121,0.25); }
+    .status-pending      { background: rgba(251,211,141,0.15);  color: var(--yellow); border: 1px solid rgba(251,211,141,0.25); }
+    .status-processing   { background: rgba(144,205,244,0.15); color: var(--blue);  border: 1px solid rgba(144,205,244,0.25); }
+    .status-failed       { background: rgba(252,129,129,0.15);   color: var(--red);    border: 1px solid rgba(252,129,129,0.25); }
+    .status-compensated  { background: rgba(246,173,85,0.15);   color: #f6ad55;       border: 1px solid rgba(246,173,85,0.25); }
+    .status-cancelled    { background: rgba(113,128,150,0.15);  color: #a0aec0;       border: 1px solid rgba(113,128,150,0.25); }
+    .status-waiting      { background: rgba(144,205,244,0.15);  color: var(--blue);  border: 1px solid rgba(144,205,244,0.25); }
 
     .section-header {
         font-family: 'Syne', sans-serif;
@@ -488,10 +491,16 @@ def fmt_date(dt_str):
 def status_badge(status):
     s = str(status).upper()
     cls = {
-        "SUCCESS":    "status-success",
-        "PENDING":    "status-pending",
-        "PROCESSING": "status-processing",
-        "FAILED":     "status-failed"
+        "SUCCESS":     "status-success",
+        "PENDING":     "status-pending",
+        "PROCESSING":  "status-processing",
+        "FAILED":      "status-failed",
+        "COMPENSATED": "status-compensated",
+        "CANCELLED":   "status-cancelled",
+        "WAITING":     "status-waiting",
+        "DEBITING":    "status-processing",
+        "CREDITING":   "status-processing",
+        "COMPLETED":   "status-success",
     }.get(s, "status-pending")
     return f'<span class="status-badge {cls}">{s}</span>'
 
@@ -637,6 +646,16 @@ elif page == "Transfer":
     st.markdown('<div class="page-title">Transfer</div>', unsafe_allow_html=True)
     st.markdown('<div class="page-subtitle">Initiate NEFT, RTGS, or IMPS transfers</div>', unsafe_allow_html=True)
 
+    # ── Session-state initialisation ────────────────────────────────────────
+    if "status_result" not in st.session_state:
+        st.session_state.status_result = None
+    if "status_transfer_id" not in st.session_state:
+        st.session_state.status_transfer_id = ""
+    if "cancel_result" not in st.session_state:
+        st.session_state.cancel_result = None   # None | "success" | "conflict" | "error"
+    if "cancel_message" not in st.session_state:
+        st.session_state.cancel_message = ""
+
     accounts     = get(SPRING_BOOT_URL, "/accounts") or []
     account_map  = {acc["name"]: acc["id"] for acc in accounts}
     account_names = list(account_map.keys())
@@ -657,8 +676,6 @@ elif page == "Transfer":
         if submitted:
             if from_name == to_name:
                 st.error("Sender and receiver cannot be the same.")
-            elif not tpin or not tpin.isdigit() or len(tpin) != 4:
-                st.error("Enter a valid 4-digit TPIN.")
             elif not tpin or not tpin.isdigit() or len(tpin) != 4:
                 st.error("Enter a valid 4-digit TPIN.")
             elif mode == "IMPS" and amount > 200000:
@@ -701,31 +718,95 @@ elif page == "Transfer":
 
                     if txn_status not in ["FAILED", "SUCCESS"] and mode in ["NEFT", "RTGS"]:
                         delay = "30 seconds" if mode == "NEFT" else "15 seconds"
-                    # else:
-                    #     st.error(f"Transfer failed: {result.get('error', 'Unknown error')}")
 
     with col2:
         st.markdown('<div class="section-header">Check Transfer Status</div>', unsafe_allow_html=True)
 
-        transfer_id = st.text_input("Transfer ID")
+        # ── Input + Check Status button ──────────────────────────────────────
+        transfer_id_input = st.text_input(
+            "Transfer ID",
+            value=st.session_state.status_transfer_id,
+            key="transfer_id_input"
+        )
+
         if st.button("Check Status"):
-            if transfer_id:
-                result = get(GIN_URL, f"/transfer/{transfer_id.strip()}")
-                if result:
-                    st.markdown(f"""
-                    <div class="result-box">
-                        <div class="result-key">Transfer ID</div>
-                        <div class="result-val">{result.get('id', '')}</div>
-                        <div class="result-key">Amount</div>
-                        <div class="result-val">{fmt_currency(result.get('amount', 0))}</div>
-                        <div class="result-key">Mode</div>
-                        <div class="result-val">{result.get('transfer_mode', '')}</div>
-                        <div class="result-key">Status</div>
-                        <div class="result-val">{status_badge(result.get('status', ''))}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.error("Transfer not found.")
+            # Persist the ID and fetch fresh status; clear any stale cancel result
+            st.session_state.status_transfer_id = transfer_id_input.strip()
+            st.session_state.cancel_result  = None
+            st.session_state.cancel_message = ""
+            st.session_state.status_result  = get(GIN_URL, f"/transfer/{transfer_id_input.strip()}/status")
+
+        # ── Cancel button — top-level, outside the Check Status block ────────
+        # Only shown when the last fetched state is WAITING
+        wf_state_cached = (st.session_state.status_result or {}).get("state", "")
+        if st.session_state.status_transfer_id and wf_state_cached == "WAITING":
+            st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
+            if st.button("🚫 Cancel Transfer", key="cancel_btn"):
+                tid = st.session_state.status_transfer_id
+                try:
+                    cancel_resp = requests.put(
+                        f"{GIN_URL}/transfer/{tid}/cancel",
+                        timeout=10
+                    )
+                    if cancel_resp.status_code == 200:
+                        st.session_state.cancel_result  = "success"
+                        st.session_state.cancel_message = "✅ Cancellation confirmed — transfer will not be settled"
+                        # Refresh status so WAITING badge updates
+                        st.session_state.status_result = get(GIN_URL, f"/transfer/{tid}/status")
+                    elif cancel_resp.status_code == 409:
+                        st.session_state.cancel_result  = "conflict"
+                        st.session_state.cancel_message = cancel_resp.json().get("error", "Could not cancel")
+                    else:
+                        st.session_state.cancel_result  = "error"
+                        st.session_state.cancel_message = "Could not reach workflow engine"
+                except Exception as e:
+                    st.session_state.cancel_result  = "error"
+                    st.session_state.cancel_message = f"Request failed: {e}"
+
+        # ── Render cancel feedback ────────────────────────────────────────────
+        if st.session_state.cancel_result == "success":
+            st.success(st.session_state.cancel_message)
+        elif st.session_state.cancel_result in ("conflict", "error"):
+            st.error(st.session_state.cancel_message)
+
+        # ── Render status result ──────────────────────────────────────────────
+        result = st.session_state.status_result
+        if result is not None:
+            wf_state   = result.get("state", "")
+            elapsed    = result.get("elapsed_seconds", 0)
+            remaining  = result.get("remaining_seconds", 0)
+            debit_done = result.get("debit_completed", False)
+            outbox_rdy = result.get("outbox_ready", False)
+            failure    = result.get("failure_reason", "")
+            db_status  = result.get("status", "")
+            display    = wf_state or db_status
+
+            def fmt_seconds(s):
+                if not s:
+                    return "—"
+                m, sec = divmod(int(s), 60)
+                return f"{m}m {sec}s" if m else f"{sec}s"
+
+            import textwrap
+            st.markdown(textwrap.dedent(f"""
+            <div class="result-box">
+                <div class="result-key">Transfer ID</div>
+                <div class="result-val">{st.session_state.status_transfer_id}</div>
+                <div class="result-key">Workflow State</div>
+                <div class="result-val">{status_badge(display)}</div>
+{'<div class="result-key">Elapsed</div><div class="result-val">' + fmt_seconds(elapsed) + '</div>' if elapsed else ''}
+{'<div class="result-key">Remaining</div><div class="result-val">' + fmt_seconds(remaining) + '</div>' if remaining else ''}
+{'<div class="result-key">Debit Done</div><div class="result-val">✅ Yes</div>' if debit_done else ''}
+{'<div class="result-key">Outbox Picked Up</div><div class="result-val">✅ Yes</div>' if outbox_rdy else ''}
+{'<div class="result-key">Failure Reason</div><div class="result-val" style="color:#fc8181;">' + failure + '</div>' if failure else ''}
+{'<div class="result-key">DB Status</div><div class="result-val">' + status_badge(db_status) + '</div>' if db_status and not wf_state else ''}
+            </div>
+            """), unsafe_allow_html=True)
+        elif st.session_state.status_transfer_id and st.session_state.status_result is None and not st.session_state.cancel_result:
+            # Only show "not found" if we actually tried a lookup (ID is set but result came back None)
+            # We use a flag to avoid showing this on initial page load
+            pass
+
 
     # ── All Gin Transfers ────────────────────────────────────────────────────
     st.markdown('<hr class="divider">', unsafe_allow_html=True)

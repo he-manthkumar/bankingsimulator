@@ -14,42 +14,25 @@ import (
 type SettlementActivity struct {
 	BankingClient client.BankingClient
 }
-type SettlementInput struct {
-	TransferID   string
-	FromAccount  string
-	ToAccount    string
-	Amount       float64
-	TransferMode string
-	Tpin         string
-}
 
-func (a *SettlementActivity) SettleTransfer(ctx context.Context, input SettlementInput) error {
-	result, err := a.BankingClient.SettleTransfer(
-		input.FromAccount,
-		input.ToAccount,
-		input.Amount,
-		input.TransferMode,
-		input.Tpin,
-	)
-	status := "FAILED"
-	if err == nil && result != nil {
-		status = result.Status
-	}
 
-	transferID, parseErr := uuid.Parse(input.TransferID)
-	if parseErr != nil {
-		return fmt.Errorf("invalid transfer ID %q: %w", input.TransferID, parseErr)
-	}
-
-	if dbErr := db.Repo.UpdateStatus(ctx, transferID, status); dbErr != nil {
-		log.Printf("Temporal activity: failed to update transfer %s in DB: %v", input.TransferID, dbErr)
-	}
-
+func (a *SettlementActivity) UpdateTransferStatus(ctx context.Context, transferID, status, reason string) error {
+	id, err := uuid.Parse(transferID)
 	if err != nil {
-		return fmt.Errorf("spring boot settlement failed for transfer %s: %w", input.TransferID, err)
+		return fmt.Errorf("invalid transfer ID %q: %w", transferID, err)
 	}
-
-	log.Printf("Temporal activity: %s transfer %s settled with status: %s",
-		input.TransferMode, input.TransferID, status)
+	if dbErr := db.Repo.UpdateStatusWithReason(ctx, id, status, reason); dbErr != nil {
+		return fmt.Errorf("failed to update transfer %s status to %s: %w", transferID, status, dbErr)
+	}
+	log.Printf("Activity: transfer %s status → %s (reason: %q)", transferID, status, reason)
 	return nil
 }
+
+func (a *SettlementActivity) CleanupOutbox(ctx context.Context, transferID string) error {
+	if err := db.OutboxRepo.DeleteByTransferID(ctx, transferID); err != nil {
+		log.Printf("Activity: failed to delete outbox entry for transfer %s: %v", transferID, err)
+	}
+	log.Printf("Activity: outbox entry cleaned up for transfer %s", transferID)
+	return nil
+}
+

@@ -1,5 +1,7 @@
 package com.banking.service;
 
+import com.banking.dto.CreditResult;
+import com.banking.dto.DebitResult;
 import com.banking.model.Account;
 import com.banking.model.Transaction;
 import com.banking.repository.AccountRepository;
@@ -24,39 +26,6 @@ public class TransactionService {
         this.accountRepository = accountRepository;
     }
 
-    @Transactional
-    public Transaction settleTransfer(UUID fromId, UUID toId, BigDecimal amount, String transferMode, String tpin) {
-        Account sender = accountRepository.findById(fromId)
-                .orElseThrow(() -> new RuntimeException("Sender account not found"));
-        Account receiver = accountRepository.findById(toId)
-                .orElseThrow(() -> new RuntimeException("Receiver account not found"));
-
-        if (!sender.getTpin().equals(tpin)) {
-            return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, "FAILED"));
-        }
-
-        if (sender.getBalance().compareTo(amount) < 0) {
-            return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, "FAILED"));
-        }
-
-        sender.setBalance(sender.getBalance().subtract(amount));
-        receiver.setBalance(receiver.getBalance().add(amount));
-        accountRepository.save(sender);
-        accountRepository.save(receiver);
-
-        return transactionRepository.save(buildTransaction(fromId, toId, amount, transferMode, "SUCCESS"));
-    }
-
-    private Transaction buildTransaction(UUID fromId, UUID toId, BigDecimal amount, String transferMode,
-            String status) {
-        return Transaction.builder()
-                .fromAccount(fromId)
-                .toAccount(toId)
-                .amount(amount)
-                .transferMode(transferMode)
-                .status(status)
-                .build();
-    }
 
     public Optional<Transaction> getTransaction(UUID id) {
         return transactionRepository.findById(id);
@@ -83,5 +52,37 @@ public class TransactionService {
                 .status(status)
                 .build();
         return transactionRepository.save(txn);
+    }
+
+    @Transactional
+    public DebitResult debitAccount(UUID accountId, BigDecimal amount, String transferRef, String tpin) {
+        Account sender = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found: " + accountId));
+        if (!sender.getTpin().equals(tpin)) {
+            throw new RuntimeException("invalid tpin for account " + accountId);
+        }
+        if (sender.getBalance().compareTo(amount) < 0) {
+            throw new RuntimeException("insufficient balance");
+        }
+        sender.setBalance(sender.getBalance().subtract(amount));
+        accountRepository.save(sender);
+        return DebitResult.builder()
+                .accountId(accountId)
+                .newBalance(sender.getBalance())
+                .transferRef(transferRef)
+                .build();
+    }
+
+    @Transactional
+    public CreditResult creditAccount(UUID accountId, BigDecimal amount, String transferRef) {
+        Account receiver = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found: " + accountId));
+        receiver.setBalance(receiver.getBalance().add(amount));
+        accountRepository.save(receiver);
+        return CreditResult.builder()
+                .accountId(accountId)
+                .newBalance(receiver.getBalance())
+                .transferRef(transferRef)
+                .build();
     }
 }
